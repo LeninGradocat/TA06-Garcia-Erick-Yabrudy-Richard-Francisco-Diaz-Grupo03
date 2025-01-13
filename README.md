@@ -7,11 +7,11 @@ Dentro del la web _AEMET_ debemos de obtener una API Key ingresando nuestro emai
 ![image](https://github.com/user-attachments/assets/e7e5bf6e-7947-4c1b-9dec-34b8f53e8d94)
 
 Una vez obtenidas las credenciales, buscamos el apartado correspondiente a la tarea, dentro de este debemos de filtrar la informacion a lo necesario para la practica, siendo los parametros los siguientes:
- Método: Regresión Rejilla
- Modelo: MIROC5
- Escenarios: RCP6.0
- Variable: Precipitación
- Periodo: 2006 - 2100
+ - Método: Regresión Rejilla
+ - Modelo: MIROC5
+ - Escenarios: RCP6.0
+ - Variable: Precipitación
+ - Periodo: 2006 - 2100
  
 ![image](https://github.com/user-attachments/assets/a9bacd1b-be95-4533-af59-ca2b1ca8e412)
 
