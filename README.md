@@ -18,3 +18,9 @@ Una vez obtenidas las credenciales, buscamos el apartado correspondiente a la ta
 El archivo que descaragaremos tendra un tamaño de 360MB el cual es un .tar.gz:
 ![Captura de pantalla de 2025-01-13 09-21-40](https://github.com/user-attachments/assets/5add685a-939c-4c5d-9d9d-6878307a7b74)
 
+Una vez descargado y extraido, el mismo se debe de subir a uno de los directorios de TA06, en este caso el E01, finalmente mostrandose de la siguiente manera:
+![image](https://github.com/user-attachments/assets/00741270-248b-4e58-9a3a-9534732811e1)
+
+Al abrir cada archivo de datos se muestra, lo siguiente:
+![image](https://github.com/user-attachments/assets/bc90edf0-06e4-4943-b0dd-100ac5affa88)
+
