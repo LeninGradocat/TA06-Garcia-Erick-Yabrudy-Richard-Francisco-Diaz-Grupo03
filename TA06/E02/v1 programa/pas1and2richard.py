@@ -174,4 +174,4 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
 if __name__ == "__main__":
     dir_path = "../../E01/dades"
     log_file_path = "../../E02/validation_log.txt"
-    validate_all_files(dir_path, log_file_path)
+    validate_all_files(dir_path, log_file_path
