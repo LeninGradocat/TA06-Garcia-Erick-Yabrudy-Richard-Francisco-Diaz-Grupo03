@@ -1,52 +1,123 @@
 import os
+import pandas as pd
+from tqdm import tqdm
+from datetime import datetime
+import warnings
 
-def get_file_info(file_path):
+def detect_delimiter(line):
+    delimiters = {'\t': line.count('\t'), ',': line.count(','), ' ': line.count(' ')}
+    return max(delimiters, key=delimiters.get)
+
+def normalize_delimiter(file_path, delimiter, target_delimiter='\t'):
     with open(file_path, 'r') as file:
         lines = file.readlines()
-        header = lines[0].strip()
-        delimiter = None
-        if ',' in header:
-            delimiter = ','
-        elif '\t' in header:
-            delimiter = '\t'
-        else:
-            delimiter = ' '
+    normalized_lines = [line.replace(delimiter, target_delimiter) for line in lines]
+    with open(file_path, 'w') as file:
+        file.writelines(normalized_lines)
 
-        columns = header.split(delimiter)
-        num_columns = len(columns)
+def validate_header(header):
+    expected_header = "precip\tMIROC5\tRCP60\tREGRESION\tdecimas\t1"
+    return header.strip() == expected_header
 
-        return {
-            'file_path': file_path,
-            'delimiter': delimiter,
-            'num_columns': num_columns,
-            'columns': columns
-        }
+def validate_metadata(metadata):
+    parts = metadata.split('\t')
+    if len(parts) != 8:
+        return False, "Metadata should have 8 columns"
+    try:
+        float(parts[1])
+        float(parts[2])
+        int(parts[3])
+        int(parts[5])
+        int(parts[6])
+    except ValueError as e:
+        return False, str(e)
+    return True, None
+
+def is_leap_year(year):
+    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
+
+def validate_line(line, id_value, year_range, days_in_month):
+    parts = line.strip().split()
+    if len(parts) < 3:
+        return False, "Line has less than 3 columns"
+
+    if parts[0] != id_value:
+        return False, "ID mismatch"
+
+    year = int(parts[1])
+    if year < year_range[0] or year > year_range[1]:
+        return False, "Year out of range"
+
+    month = int(parts[2])
+    if month not in days_in_month:
+        return False, "Invalid month"
+
+    if month == 2:
+        expected_days = 29 if is_leap_year(year) else 28
+    else:
+        expected_days = days_in_month[month]
+
+    actual_days = len(parts) - 3
+    if parts[-1] == "-999":
+        actual_days -= 1
+
+    if actual_days != expected_days:
+        return False, f"Month {month} has {actual_days} days of data instead of {expected_days}"
+
+    return True, ""
 
 def validate_files(directory):
-    file_infos = []
-    for root, _, files in os.walk(directory):
-        for file in files:
-            if file.endswith('.dat'):
-                file_path = os.path.join(root, file)
-                file_info = get_file_info(file_path)
-                file_infos.append(file_info)
-                print(f"Validating file: {file_path}")
+    file_infos = [os.path.join(root, file) for root, _, files in os.walk(directory) for file in files if file.endswith('.dat')]
 
     if not file_infos:
         print("No .dat files found in the directory.")
         return
 
-    reference_info = file_infos[0]
-    for file_info in file_infos[1:]:
-        if file_info['delimiter'] != reference_info['delimiter']:
-            print(f"Delimiter mismatch in file: {file_info['file_path']}")
-        if file_info['num_columns'] != reference_info['num_columns']:
-            print(f"Column count mismatch in file: {file_info['file_path']}")
-        if file_info['columns'] != reference_info['columns']:
-            print(f"Column names mismatch in file: {file_info['file_path']}")
+    discrepancies = []
+    lines_with_minus_999 = 0
+    current_time = datetime.now().strftime("%Y%m%d%H%M%S")
+    log_file_path = f"../../E02/v1 programa/validation_log_{current_time}.log"
+    error_log_path = f"../../E02/v1 programa/error_log_{current_time}.log"
 
-    print("Validation completed.")
+    with open(log_file_path, 'w') as log_file, open(error_log_path, 'w') as error_log:
+        for file_path in tqdm(file_infos, desc="Validating files", leave=False):
+            try:
+                with warnings.catch_warnings(record=True) as w:
+                    warnings.simplefilter("always")
+                    df = pd.read_csv(file_path, sep='\s+', header=None, skiprows=2, chunksize=1000)
+                    for chunk in df:
+                        id_value = chunk.iloc[0, 0]
+                        year_range = (2005, 2101)
+                        days_in_month = {
+                            1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
+                            7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31
+                        }
 
-# Directory path
-directory_path = '/home/erick.garcia.7e8/PycharmProjects/TA06-Garcia-Erick-Yabrudy-Richard-Francisco-Diaz-Grupo03'
+                        for index, row in chunk.iterrows():
+                            line = " ".join(row.astype(str).values)
+                            is_valid, msg = validate_line(line, id_value, year_range, days_in_month)
+                            if not is_valid:
+                                if line.strip().endswith("-999"):
+                                    lines_with_minus_999 += 1
+                                else:
+                                    timestamp = datetime.now().strftime("day_%d.%m.%Y_timer_%H:%M:%S")
+                                    log_file.write(f"{timestamp} {file_path} {msg} on line {index + 3}\n")
+                                    discrepancies.append(f"{file_path}: {msg} on line {index + 3}")
+                    for warning in w:
+                        error_log.write(f"{warning.message}\n")
+            except Exception as e:
+                timestamp = datetime.now().strftime("day_%d.%m.%Y_timer_%H:%M:%S")
+                error_log.write(f"{timestamp} {file_path} {str(e)}\n")
+                discrepancies.append(f"{file_path}: {str(e)}")
+
+        if not discrepancies:
+            log_file.write("NO ERROR\n")
+        log_file.write(f"Lines with -999: {lines_with_minus_999}\n")
+
+    if discrepancies:
+        print("\nFormat discrepancies found. Check the log file for details.")
+    else:
+        print("\nAll files have consistent formats.")
+
+directory_path = '../../E01/dades/'
 validate_files(directory_path)
