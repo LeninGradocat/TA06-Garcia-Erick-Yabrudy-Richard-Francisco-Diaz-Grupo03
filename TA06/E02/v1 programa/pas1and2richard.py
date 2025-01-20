@@ -46,6 +46,7 @@ def validate_metadata(metadata):
         int(parts[3])    # Elevation or code
         int(parts[5])    # Start year
         int(parts[6])    # End year
+
     except ValueError as e:
         return False, str(e)
     return True, None
