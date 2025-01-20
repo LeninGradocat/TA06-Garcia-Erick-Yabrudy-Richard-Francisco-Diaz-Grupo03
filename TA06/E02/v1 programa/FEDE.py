@@ -5,6 +5,7 @@ from datetime import datetime
 import warnings
 from multiprocessing import Pool
 
+
 def detect_delimiter(line):
     delimiters = {'\t': line.count('\t'), ',': line.count(','), ' ': line.count(' ')}
     return max(delimiters, key=delimiters.get)
