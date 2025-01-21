@@ -207,5 +207,5 @@ def validate_files(directory):
         console.print(Panel(Text("All files have consistent formats.", justify="center"),
                             title="Success", style="bold green", expand=False))
 
-directory_path = '../../E01/dades/'
+directory_path = '../../../E01/data/'
 validate_files(directory_path)

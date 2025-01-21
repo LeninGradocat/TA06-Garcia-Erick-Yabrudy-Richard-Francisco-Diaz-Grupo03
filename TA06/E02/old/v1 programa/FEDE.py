@@ -233,6 +233,6 @@ def validate_line(self, line, id_value, year_range, days_in_month):
                 for file_path in file_infos:
                     self.process_file(file_path)
 
-directory_path = '../../E01/dades-prove/'
+directory_path = '../../../E01/data-testing/'
 validator = FileValidator(fill_missing=True)
 validator.validate_files(directory_path)

@@ -246,5 +246,5 @@ def analyze_and_plot(df):
     print("Plots generated successfully.")
 
 
-directory_path = '../../E01/dades-prove/'
+directory_path = '../../../E01/data-testing/'
 validate_files(directory_path)
