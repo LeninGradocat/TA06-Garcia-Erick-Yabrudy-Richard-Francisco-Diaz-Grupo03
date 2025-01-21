@@ -1,15 +1,14 @@
 import os
+import time
 from tqdm import tqdm
+from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
 from colorama import Fore, init
-import xml.etree.ElementTree as ET
-import json
-import time
-from datetime import datetime
 
-# Initialize colorama and rich console
+# Initialize Colorama and Rich
 init(autoreset=True)
 console = Console()
 
@@ -46,7 +45,6 @@ def validate_metadata(metadata):
         int(parts[3])    # Elevation or code
         int(parts[5])    # Start year
         int(parts[6])    # End year
-
     except ValueError as e:
         return False, str(e)
     return True, None
@@ -90,6 +88,8 @@ def validate_file(file_path, expected_columns=34):
     missing_values = 0
     total_rainfall = 0
     lines_processed = 0
+    yearly_data = {}
+    current_year = datetime.now().year
 
     try:
         with open(file_path, 'r') as file:
@@ -102,19 +102,74 @@ def validate_file(file_path, expected_columns=34):
             metadata_valid, error = validate_metadata(lines[1])
             if not metadata_valid:
                 errors.append(f"Metadata error: {lines[1].strip()} - {error}")
-            for i, line in enumerate(lines[2:], start=3):  # Start from line 3
+            for i, line in enumerate(lines[2:], start=3):
+                parts = line.split()
+                year = int(parts[1])
+                if year > current_year:
+                    continue
                 valid, error = validate_data_line(line, expected_columns)
                 if not valid:
                     errors.append(f"Line {i} error: {line.strip()} - {error}")
                 else:
-                    parts = line.split()
                     total_values += len(parts[3:])
                     missing_values += parts[3:].count("-999")
-                    total_rainfall += sum(float(value) for value in parts[3:] if value != "-999")
+                    rainfall = sum(float(value) for value in parts[3:] if value != "-999")
+                    total_rainfall += rainfall
                     lines_processed += 1
+                    if year not in yearly_data:
+                        yearly_data[year] = {'total_rainfall': 0, 'count': 0}
+                    yearly_data[year]['total_rainfall'] += rainfall
+                    yearly_data[year]['count'] += 1
     except Exception as e:
         errors.append(f"Error processing file {file_path}: {str(e)}")
-    return errors, total_values, missing_values, total_rainfall, lines_processed
+    return errors, total_values, missing_values, total_rainfall, lines_processed, yearly_data
+
+def calculate_statistics(yearly_data):
+    """Calculates statistics from yearly data, excluding future years."""
+    current_year = datetime.now().year
+    filtered_data = {year: data for year, data in yearly_data.items() if year <= current_year}
+
+    if not filtered_data:
+        return {
+            'total_years': 0,
+            'total_rainfall': 0,
+            'average_rainfall': 0,
+            'driest_year': (None, 0),
+            'wettest_year': (None, 0),
+            'annual_change_rate': []
+        }
+
+    total_years = len(filtered_data)
+    total_rainfall = sum(data['total_rainfall'] for data in filtered_data.values())
+    average_rainfall = total_rainfall / total_years if total_years else 0
+    yearly_rainfall = {year: data['total_rainfall'] for year, data in filtered_data.items()}
+    sorted_years = sorted(yearly_rainfall.items(), key=lambda x: x[1])
+    driest_year = sorted_years[0] if sorted_years else (None, 0)
+    wettest_year = sorted_years[-1] if sorted_years else (None, 0)
+    all_years = range(min(filtered_data.keys()), max(filtered_data.keys()) + 1)
+    filled_data = {year: filtered_data.get(year, {'total_rainfall': 0, 'count': 0}) for year in all_years}
+    annual_change_rate = [
+        (year, ((filled_data[year]['total_rainfall'] - filled_data[year - 1]['total_rainfall']) /
+                filled_data[year - 1]['total_rainfall']) * 100)
+        for year in all_years if year > min(all_years) and filled_data[year - 1]['total_rainfall'] != 0
+    ]
+    return {
+        'total_years': total_years,
+        'total_rainfall': total_rainfall,
+        'average_rainfall': average_rainfall,
+        'driest_year': driest_year,
+        'wettest_year': wettest_year,
+        'annual_change_rate': annual_change_rate
+    }
+
+def display_annual_change_rate(change_rate):
+    """Displays the annual change rate in a tabular format."""
+    table = Table(title="Annual Change Rate")
+    table.add_column("Year", justify="center", style="bold green")
+    table.add_column("Change (%)", justify="right", style="bold blue")
+    for year, rate in change_rate:
+        table.add_row(str(year), f"{rate:.2f}%")
+    console.print(table)
 
 def validate_all_files(directory, log_file_path, expected_columns=34):
     """Validates all files in a directory and logs errors."""
@@ -139,6 +194,7 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
     missing_values = 0
     total_rainfall = 0
     lines_processed = 0
+    yearly_data = {}
 
     try:
         with open(log_file_path, 'w') as log_file:
@@ -146,12 +202,17 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
             with tqdm(total=len(files), desc=desc,
                       bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed} < {remaining}, {rate_fmt}]") as pbar:
                 for file_path in sorted(files):
-                    errors, file_total_values, file_missing_values, file_total_rainfall, file_lines_processed = validate_file(file_path, expected_columns)
+                    errors, file_total_values, file_missing_values, file_total_rainfall, file_lines_processed, file_yearly_data = validate_file(file_path, expected_columns)
                     total_errors += len(errors)
                     total_values += file_total_values
                     missing_values += file_missing_values
                     total_rainfall += file_total_rainfall
                     lines_processed += file_lines_processed
+                    for year, data in file_yearly_data.items():
+                        if year not in yearly_data:
+                            yearly_data[year] = {'total_rainfall': 0, 'count': 0}
+                        yearly_data[year]['total_rainfall'] += data['total_rainfall']
+                        yearly_data[year]['count'] += data['count']
                     if errors:
                         log_file.write(f"Invalid file format: {file_path}\n")
                         for error in errors:
@@ -163,16 +224,23 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
                             title="Error", style="bold red", expand=False))
 
     missing_percentage = (missing_values / total_values * 100) if total_values else 0
+    stats = calculate_statistics(yearly_data)
+    summarized_change_rate = stats['annual_change_rate']
+
     console.print(Panel(Text(f"Validation completed.\n"
                              f"Errors found: {total_errors:,}\n"
                              f"Lines processed: {lines_processed:,}\n"
                              f"Total values processed: {total_values:,}\n"
                              f"Missing values (-999) found: {missing_values:,}\n"
                              f"Percentage of missing values: {missing_percentage:.2f}%\n"
-                             f"Total rainfall: {total_rainfall:,.2f}",
+                             f"Total rainfall: {total_rainfall:,.2f}\n"
+                             f"Average annual rainfall: {stats['average_rainfall']:,.2f} mm\n"
+                             f"Driest year: {stats['driest_year'][0]} with {stats['driest_year'][1]:,.2f} mm\n"
+                             f"Wettest year: {stats['wettest_year'][0]} with {stats['wettest_year'][1]:,.2f} mm\n",
                              justify="center"), title="Summary", style="bold green", expand=False))
+    display_annual_change_rate(summarized_change_rate)
 
 if __name__ == "__main__":
     dir_path = "../../E01/dades"
     log_file_path = "../../E02/validation_log.txt"
-    validate_all_files(dir_path, log_file_path
+    validate_all_files(dir_path, log_file_path)
