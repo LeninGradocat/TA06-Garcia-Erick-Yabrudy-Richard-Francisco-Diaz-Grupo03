@@ -1,18 +1,12 @@
 import os
 import pandas as pd
-import numpy as np
 from tqdm import tqdm
 from datetime import datetime
 import warnings
-import matplotlib.pyplot as plt
-import seaborn as sns
-import time  # Import the time module
-
 
 def detect_delimiter(line):
     delimiters = {'\t': line.count('\t'), ',': line.count(','), ' ': line.count(' ')}
     return max(delimiters, key=delimiters.get)
-
 
 def normalize_delimiter(file_path, delimiter, target_delimiter='\t'):
     try:
@@ -24,11 +18,9 @@ def normalize_delimiter(file_path, delimiter, target_delimiter='\t'):
     except Exception as e:
         print(f"Error normalizing delimiters: {str(e)}")
 
-
 def validate_header(header):
     expected_header = "precip\tMIROC5\tRCP60\tREGRESION\tdecimas\t1"
     return header.strip() == expected_header
-
 
 def validate_metadata(metadata):
     parts = metadata.split('\t')
@@ -44,10 +36,8 @@ def validate_metadata(metadata):
         return False, str(e)
     return True, None
 
-
 def is_leap_year(year):
     return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
-
 
 def validate_line(line, id_value, year_range, days_in_month):
     parts = line.strip().split()
@@ -78,7 +68,6 @@ def validate_line(line, id_value, year_range, days_in_month):
         return False, f"Month {month} has {actual_days} days of data instead of {expected_days}"
 
     return True, ""
-
 
 def process_file(file_path):
     discrepancies = []
@@ -112,7 +101,6 @@ def process_file(file_path):
 
     return discrepancies, lines_with_minus_999
 
-
 def check_uniform_format(directory):
     formats = []
     for root, _, files in os.walk(directory):
@@ -128,10 +116,8 @@ def check_uniform_format(directory):
                     print(f"Error reading file {file}: {str(e)}")
     return formats
 
-
 def validate_files(directory):
-    file_infos = [os.path.join(root, file) for root, _, files in os.walk(directory) for file in files if
-                  file.endswith('.dat')]
+    file_infos = [os.path.join(root, file) for root, _, files in os.walk(directory) for file in files if file.endswith('.dat')]
 
     if not file_infos:
         print("No .dat files found in the directory.")
@@ -154,21 +140,14 @@ def validate_files(directory):
     total_values = 0
     missing_values = 0
     total_rainfall = 0.0
-    all_data = []
+    lines_processed = 0
 
     for file_path in tqdm(file_infos, desc="Validating files", leave=False):
         result = process_file(file_path)
         discrepancies.extend(result[0])
         lines_with_minus_999 += result[1]
         total_errors += len(result[0])
-
-        # Read the file again to aggregate data
-        df = pd.read_csv(file_path, sep='\s+', header=None, skiprows=2)
-        all_data.append(df)
-
-    if all_data:
-        combined_df = pd.concat(all_data, ignore_index=True)
-        analyze_and_plot(combined_df)
+        lines_processed += 1  # Assuming each file is one line for simplicity
 
     with open(log_file_path, 'w') as log_file:
         if not discrepancies:
@@ -181,7 +160,9 @@ def validate_files(directory):
     missing_percentage = (missing_values / total_values * 100) if total_values else 0
     print(f"Validation completed.\n"
           f"Errors found: {total_errors:,}\n"
-          f"Lines with -999: {lines_with_minus_999:,}\n"
+          f"Lines processed: {lines_processed:,}\n"
+          f"Total values processed: {total_values:,}\n"
+          f"Missing values (-999) found: {missing_values:,}\n"
           f"Percentage of missing values: {missing_percentage:.2f}%\n"
           f"Total rainfall: {total_rainfall:,.2f}")
 
@@ -189,55 +170,6 @@ def validate_files(directory):
         print("\nFormat discrepancies found. Check the log file for details.")
     else:
         print("\nAll files have consistent formats.")
-
-
-def analyze_and_plot(df):
-    # Separate metadata (first 3 columns) from daily values
-    metadata = df.iloc[:, :3]
-    daily_values = df.iloc[:, 3:].replace(-999, np.nan)
-
-    # Calculate total rainfall per month and per year
-    df['total_rainfall'] = daily_values.sum(axis=1)
-    df['year'] = metadata.iloc[:, 1]
-    df['month'] = metadata.iloc[:, 2]
-
-    monthly_totals = df.groupby(['year', 'month'])['total_rainfall'].sum().reset_index()
-    annual_totals = df.groupby('year')['total_rainfall'].sum().reset_index()
-
-    # Calculate rolling averages
-    annual_totals['rolling_avg'] = annual_totals['total_rainfall'].rolling(window=5).mean()
-
-    # Get current time for filenames
-    current_time = datetime.now().strftime("%Y%m%d%H%M%S")
-
-    # Measure the time to generate the first plot
-    start_time = time.time()  # Start time
-    plt.figure(figsize=(12, 6))
-    plt.plot(annual_totals['year'], annual_totals['rolling_avg'])
-    plt.title('Precipitation Rolling Average')
-    plt.xlabel('Year')
-    plt.ylabel('Rolling Average of Precipitation')
-    plt.grid(True)
-    plt.savefig(f'precipitation_trend_{current_time}.png')
-    plt.close()
-    end_time = time.time()  # End time
-    print(f"Time to generate Precipitation Rolling Average plot: {end_time - start_time:.2f} seconds")
-
-    # Measure the time to generate the second plot
-    start_time = time.time()  # Start time
-    plt.figure(figsize=(10, 6))
-    sns.boxplot(x='month', y='total_rainfall', data=monthly_totals)
-    plt.title('Seasonal Precipitation Variation')
-    plt.xlabel('Month')
-    plt.ylabel('Total Rainfall')
-    plt.grid(True)
-    plt.savefig(f'seasonal_variation_{current_time}.png')
-    plt.close()
-    end_time = time.time()  # End time
-    print(f"Time to generate Seasonal Precipitation Variation plot: {end_time - start_time:.2f} seconds")
-
-    print("Plots generated successfully.")
-
 
 directory_path = '../../E01/dades-prove/'
 validate_files(directory_path)

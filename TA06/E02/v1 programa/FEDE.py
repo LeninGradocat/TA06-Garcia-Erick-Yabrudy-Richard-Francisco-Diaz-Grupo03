@@ -66,6 +66,38 @@ def validate_line(line, id_value, year_range, days_in_month):
 
     return True, ""
 
+def process_file(file_path):
+    discrepancies = []
+    lines_with_minus_999 = 0
+    try:
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            df = pd.read_csv(file_path, sep='\s+', header=None, skiprows=2, chunksize=1000)
+            for chunk in df:
+                id_value = chunk.iloc[0, 0]
+                year_range = (2005, 2101)
+                days_in_month = {
+                    1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
+                    7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31
+                }
+
+                for index, row in chunk.iterrows():
+                    line = " ".join(row.astype(str).values)
+                    is_valid, msg = validate_line(line, id_value, year_range, days_in_month)
+                    if not is_valid:
+                        if line.strip().endswith("-999"):
+                            lines_with_minus_999 += 1
+                        else:
+                            timestamp = datetime.now().strftime("day_%d.%m.%Y_timer_%H:%M:%S")
+                            discrepancies.append(f"{timestamp} {file_path} {msg} on line {index + 3}")
+            for warning in w:
+                discrepancies.append(f"{warning.message}")
+    except Exception as e:
+        timestamp = datetime.now().strftime("day_%d.%m.%Y_timer_%H:%M:%S")
+        discrepancies.append(f"{timestamp} {file_path} {str(e)}")
+
+    return discrepancies, lines_with_minus_999
+
 def validate_files(directory):
     file_infos = [os.path.join(root, file) for root, _, files in os.walk(directory) for file in files if file.endswith('.dat')]
 
@@ -73,45 +105,23 @@ def validate_files(directory):
         print("No .dat files found in the directory.")
         return
 
-    discrepancies = []
-    lines_with_minus_999 = 0
     current_time = datetime.now().strftime("%Y%m%d%H%M%S")
     log_file_path = f"../../E02/v1 programa/validation_log_{current_time}.log"
     error_log_path = f"../../E02/v1 programa/error_log_{current_time}.log"
 
-    with open(log_file_path, 'w') as log_file, open(error_log_path, 'w') as error_log:
-        for file_path in tqdm(file_infos, desc="Validating files", leave=False):
-            try:
-                with warnings.catch_warnings(record=True) as w:
-                    warnings.simplefilter("always")
-                    df = pd.read_csv(file_path, sep='\s+', header=None, skiprows=2, chunksize=1000)
-                    for chunk in df:
-                        id_value = chunk.iloc[0, 0]
-                        year_range = (2005, 2101)
-                        days_in_month = {
-                            1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
-                            7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31
-                        }
+    discrepancies = []
+    lines_with_minus_999 = 0
+    for file_path in tqdm(file_infos, desc="Validating files", leave=False):
+        result = process_file(file_path)
+        discrepancies.extend(result[0])
+        lines_with_minus_999 += result[1]
 
-                        for index, row in chunk.iterrows():
-                            line = " ".join(row.astype(str).values)
-                            is_valid, msg = validate_line(line, id_value, year_range, days_in_month)
-                            if not is_valid:
-                                if line.strip().endswith("-999"):
-                                    lines_with_minus_999 += 1
-                                else:
-                                    timestamp = datetime.now().strftime("day_%d.%m.%Y_timer_%H:%M:%S")
-                                    log_file.write(f"{timestamp} {file_path} {msg} on line {index + 3}\n")
-                                    discrepancies.append(f"{file_path}: {msg} on line {index + 3}")
-                    for warning in w:
-                        error_log.write(f"{warning.message}\n")
-            except Exception as e:
-                timestamp = datetime.now().strftime("day_%d.%m.%Y_timer_%H:%M:%S")
-                error_log.write(f"{timestamp} {file_path} {str(e)}\n")
-                discrepancies.append(f"{file_path}: {str(e)}")
-
+    with open(log_file_path, 'w') as log_file:
         if not discrepancies:
             log_file.write("NO ERROR\n")
+        else:
+            for discrepancy in discrepancies:
+                log_file.write(f"{discrepancy}\n")
         log_file.write(f"Lines with -999: {lines_with_minus_999}\n")
 
     if discrepancies:
@@ -119,5 +129,5 @@ def validate_files(directory):
     else:
         print("\nAll files have consistent formats.")
 
-directory_path = '../../E01/dades/'
+directory_path = '../../E01/dades-prove/'
 validate_files(directory_path)
