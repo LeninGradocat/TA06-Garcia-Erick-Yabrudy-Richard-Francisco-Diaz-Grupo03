@@ -8,6 +8,7 @@ from rich.panel import Panel
 from rich.text import Text
 from colorama import Fore, init
 from concurrent.futures import ProcessPoolExecutor
+import logging
 
 # Initialize colorama and rich console
 init(autoreset=True)
@@ -16,6 +17,13 @@ console = Console()
 class FileValidator:
     def __init__(self, fill_missing=False):
         self.fill_missing = fill_missing
+        self.setup_logging()
+
+    def setup_logging(self):
+        current_time = datetime.now().strftime("%Y%m%d%H%M%S")
+        self.correction_log_path = f"../../E02/v1 programa/correction_log_{current_time}.log"
+        logging.basicConfig(filename=self.correction_log_path, level=logging.INFO,
+                            format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
     def detect_delimiter(self, line):
         delimiters = {'\t': line.count('\t'), ',': line.count(','), ' ': line.count(' ')}
@@ -56,40 +64,41 @@ class FileValidator:
     def is_leap_year(self, year):
         return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
 
-def validate_line(self, line, id_value, year_range, days_in_month):
-    parts = line.strip().split()
-    if len(parts) < 3:
-        return False, "Line has less than 3 columns"
+    def validate_line(self, line, id_value, year_range, days_in_month):
+        parts = line.strip().split()
+        if len(parts) < 3:
+            return False, "Line has less than 3 columns"
 
-    if parts[0] != id_value:
-        return False, "ID mismatch"
+        if parts[0] != id_value:
+            return False, "ID mismatch"
 
-    year = int(parts[1])
-    if year < year_range[0] or year > year_range[1]:
-        return False, "Year out of range"
+        year = int(parts[1])
+        if year < year_range[0] or year > year_range[1]:
+            return False, "Year out of range"
 
-    month = int(parts[2])
-    if month not in days_in_month:
-        return False, "Invalid month"
+        month = int(parts[2])
+        if month not in days_in_month:
+            return False, "Invalid month"
 
-    if month == 2:
-        expected_days = 29 if self.is_leap_year(year) else 28
-    else:
-        expected_days = days_in_month[month]
-
-    actual_days = len(parts) - 3
-    if parts[-1] == "-999":
-        actual_days -= 1
-
-    if actual_days != expected_days:
-        if self.fill_missing:
-            parts.extend(["-999"] * (expected_days - actual_days))
-            line = "\t".join(parts)
-            return True, line
+        if month == 2:
+            expected_days = 29 if self.is_leap_year(year) else 28
         else:
-            return False, f"Month {month} has {actual_days} days of data instead of {expected_days}"
+            expected_days = days_in_month[month]
 
-    return True, line
+        actual_days = len(parts) - 3
+        if parts[-1] == "-999":
+            actual_days -= 1
+
+        if actual_days != expected_days:
+            if self.fill_missing:
+                parts.extend(["-999"] * (expected_days - actual_days))
+                line = "\t".join(parts)
+                logging.info(f"Corrected line in file {id_value}: {line}")
+                return True, line
+            else:
+                return False, f"Month {month} has {actual_days} days of data instead of {expected_days}"
+
+        return True, line
 
     def process_file(self, file_path):
         discrepancies = []
@@ -99,7 +108,6 @@ def validate_line(self, line, id_value, year_range, days_in_month):
         total_rainfall = 0.0
         lines_processed = 0
         corrected_lines = []
-
 
         try:
             with warnings.catch_warnings(record=True) as w:
