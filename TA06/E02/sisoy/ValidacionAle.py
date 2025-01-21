@@ -1,6 +1,52 @@
 import os
 import pandas as pd
+import numpy as np
+from tqdm import tqdm
 from datetime import datetime
+import warnings
+import matplotlib.pyplot as plt
+import seaborn as sns
+import time  # Import the time module
+
+
+def detect_delimiter(line):
+    delimiters = {'\t': line.count('\t'), ',': line.count(','), ' ': line.count(' ')}
+    return max(delimiters, key=delimiters.get)
+
+
+def normalize_delimiter(file_path, delimiter, target_delimiter='\t'):
+    try:
+        with open(file_path, 'r') as file:
+            lines = file.readlines()
+        normalized_lines = [line.replace(delimiter, target_delimiter) for line in lines]
+        with open(file_path, 'w') as file:
+            file.writelines(normalized_lines)
+    except Exception as e:
+        print(f"Error normalizing delimiters: {str(e)}")
+
+
+def validate_header(header):
+    expected_header = "precip\tMIROC5\tRCP60\tREGRESION\tdecimas\t1"
+    return header.strip() == expected_header
+
+
+def validate_metadata(metadata):
+    parts = metadata.split('\t')
+    if len(parts) != 8:
+        return False, "Metadata should have 8 columns"
+    try:
+        float(parts[1])
+        float(parts[2])
+        int(parts[3])
+        int(parts[5])
+        int(parts[6])
+    except ValueError as e:
+        return False, str(e)
+    return True, None
+
+
+def is_leap_year(year):
+    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
 
 
 def validate_line(line, id_value, year_range, days_in_month):
@@ -8,23 +54,23 @@ def validate_line(line, id_value, year_range, days_in_month):
     if len(parts) < 3:
         return False, "Line has less than 3 columns"
 
-    # Validate ID
     if parts[0] != id_value:
         return False, "ID mismatch"
 
-    # Validate Year
     year = int(parts[1])
     if year < year_range[0] or year > year_range[1]:
         return False, "Year out of range"
 
-    # Validate Month
     month = int(parts[2])
     if month not in days_in_month:
         return False, "Invalid month"
 
-    # Validate days count for the month, ignoring the last `-999` if present
-    expected_days = days_in_month[month]
-    actual_days = len(parts) - 3  # Exclude ID, year, and month columns
+    if month == 2:
+        expected_days = 29 if is_leap_year(year) else 28
+    else:
+        expected_days = days_in_month[month]
+
+    actual_days = len(parts) - 3
     if parts[-1] == "-999":
         actual_days -= 1
 
@@ -32,6 +78,55 @@ def validate_line(line, id_value, year_range, days_in_month):
         return False, f"Month {month} has {actual_days} days of data instead of {expected_days}"
 
     return True, ""
+
+
+def process_file(file_path):
+    discrepancies = []
+    lines_with_minus_999 = 0
+    try:
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            df = pd.read_csv(file_path, sep='\s+', header=None, skiprows=2, chunksize=1000)
+            for chunk in df:
+                id_value = chunk.iloc[0, 0]
+                year_range = (2005, 2101)
+                days_in_month = {
+                    1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
+                    7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31
+                }
+
+                for index, row in chunk.iterrows():
+                    line = " ".join(row.astype(str).values)
+                    is_valid, msg = validate_line(line, id_value, year_range, days_in_month)
+                    if not is_valid:
+                        if line.strip().endswith("-999"):
+                            lines_with_minus_999 += 1
+                        else:
+                            timestamp = datetime.now().strftime("day_%d.%m.%Y_timer_%H:%M:%S")
+                            discrepancies.append(f"{timestamp} {file_path} {msg} on line {index + 3}")
+            for warning in w:
+                discrepancies.append(f"{warning.message}")
+    except Exception as e:
+        timestamp = datetime.now().strftime("day_%d.%m.%Y_timer_%H:%M:%S")
+        discrepancies.append(f"{timestamp} {file_path} {str(e)}")
+
+    return discrepancies, lines_with_minus_999
+
+
+def check_uniform_format(directory):
+    formats = []
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.endswith(".dat"):
+                try:
+                    with open(os.path.join(root, file), 'r') as f:
+                        header = f.readline().strip()
+                        delimiter = detect_delimiter(header)
+                        columns = len(header.split(delimiter))
+                        formats.append((file, delimiter, columns))
+                except Exception as e:
+                    print(f"Error reading file {file}: {str(e)}")
+    return formats
 
 
 def validate_files(directory):
@@ -42,43 +137,107 @@ def validate_files(directory):
         print("No .dat files found in the directory.")
         return
 
-    discrepancies = []
+    current_time = datetime.now().strftime("%Y%m%d%H%M%S")
+    log_file_path = f"../../E02/v1 programa/validation_log_{current_time}.log"
+    error_log_path = f"../../E02/v1 programa/error_log_{current_time}.log"
 
-    # Generate a unique log file name with the current date and time
-    log_file_path = f"inconsistencies_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    formats = check_uniform_format(directory)
+    unique_formats = set((fmt[1], fmt[2]) for fmt in formats)
+    if len(unique_formats) > 1:
+        print("Found inconsistent formats:")
+        for fmt in unique_formats:
+            print(f"  Delimiter: {fmt[0]}, Columns: {fmt[1]}")
+
+    discrepancies = []
+    lines_with_minus_999 = 0
+    total_errors = 0
+    total_values = 0
+    missing_values = 0
+    total_rainfall = 0.0
+    all_data = []
+
+    for file_path in tqdm(file_infos, desc="Validating files", leave=False):
+        result = process_file(file_path)
+        discrepancies.extend(result[0])
+        lines_with_minus_999 += result[1]
+        total_errors += len(result[0])
+
+        # Read the file again to aggregate data
+        df = pd.read_csv(file_path, sep='\s+', header=None, skiprows=2)
+        all_data.append(df)
+
+    if all_data:
+        combined_df = pd.concat(all_data, ignore_index=True)
+        analyze_and_plot(combined_df)
 
     with open(log_file_path, 'w') as log_file:
-        for file_path in file_infos:
-            try:
-                df = pd.read_csv(file_path, delim_whitespace=True, header=None, skiprows=2)
-                id_value = df.iloc[0, 0]
-                year_range = (2005, 2101)
-                days_in_month = {
-                    1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
-                    7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31
-                }
+        if not discrepancies:
+            log_file.write("NO ERROR\n")
+        else:
+            for discrepancy in discrepancies:
+                log_file.write(f"{discrepancy}\n")
+        log_file.write(f"Lines with -999: {lines_with_minus_999}\n")
 
-                for index, row in df.iterrows():
-                    line = " ".join(row.astype(str).values)
-                    is_valid, msg = validate_line(line, id_value, year_range, days_in_month)
-                    if not is_valid:
-                        timestamp = datetime.now().strftime("day_%d.%m.%Y_timer_%H:%M:%S")
-                        log_file.write(f"{timestamp} {file_path} {msg} on line {index + 3}\n")
-                        discrepancies.append(f"{file_path}: {msg} on line {index + 3}")
-            except Exception as e:
-                timestamp = datetime.now().strftime("day_%d.%m.%Y_timer_%H:%M:%S")
-                log_file.write(f"{timestamp} {file_path} {str(e)}\n")
-                discrepancies.append(f"{file_path}: {str(e)}")
+    missing_percentage = (missing_values / total_values * 100) if total_values else 0
+    print(f"Validation completed.\n"
+          f"Errors found: {total_errors:,}\n"
+          f"Lines with -999: {lines_with_minus_999:,}\n"
+          f"Percentage of missing values: {missing_percentage:.2f}%\n"
+          f"Total rainfall: {total_rainfall:,.2f}")
 
     if discrepancies:
-        print("\nFormat discrepancies found:")
-        for discrepancy in discrepancies:
-            print(discrepancy)
-        print(f"\nInconsistencies logged in {log_file_path}")
+        print("\nFormat discrepancies found. Check the log file for details.")
     else:
         print("\nAll files have consistent formats.")
 
 
-# Directory path
-directory_path = '../../E01/dades/'
+def analyze_and_plot(df):
+    # Separate metadata (first 3 columns) from daily values
+    metadata = df.iloc[:, :3]
+    daily_values = df.iloc[:, 3:].replace(-999, np.nan)
+
+    # Calculate total rainfall per month and per year
+    df['total_rainfall'] = daily_values.sum(axis=1)
+    df['year'] = metadata.iloc[:, 1]
+    df['month'] = metadata.iloc[:, 2]
+
+    monthly_totals = df.groupby(['year', 'month'])['total_rainfall'].sum().reset_index()
+    annual_totals = df.groupby('year')['total_rainfall'].sum().reset_index()
+
+    # Calculate rolling averages
+    annual_totals['rolling_avg'] = annual_totals['total_rainfall'].rolling(window=5).mean()
+
+    # Get current time for filenames
+    current_time = datetime.now().strftime("%Y%m%d%H%M%S")
+
+    # Measure the time to generate the first plot
+    start_time = time.time()  # Start time
+    plt.figure(figsize=(12, 6))
+    plt.plot(annual_totals['year'], annual_totals['rolling_avg'])
+    plt.title('Precipitation Rolling Average')
+    plt.xlabel('Year')
+    plt.ylabel('Rolling Average of Precipitation')
+    plt.grid(True)
+    plt.savefig(f'precipitation_trend_{current_time}.png')
+    plt.close()
+    end_time = time.time()  # End time
+    print(f"Time to generate Precipitation Rolling Average plot: {end_time - start_time:.2f} seconds")
+
+    # Measure the time to generate the second plot
+    start_time = time.time()  # Start time
+    plt.figure(figsize=(10, 6))
+    sns.boxplot(x='month', y='total_rainfall', data=monthly_totals)
+    plt.title('Seasonal Precipitation Variation')
+    plt.xlabel('Month')
+    plt.ylabel('Total Rainfall')
+    plt.grid(True)
+    plt.savefig(f'seasonal_variation_{current_time}.png')
+    plt.close()
+    end_time = time.time()  # End time
+    print(f"Time to generate Seasonal Precipitation Variation plot: {end_time - start_time:.2f} seconds")
+
+    print("Plots generated successfully.")
+
+
+directory_path = '../../E01/dades-prove/'
 validate_files(directory_path)
