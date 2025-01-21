@@ -177,5 +177,4 @@ print(f"Tiempo para generar el gráfico de Variación Estacional de Precipitaci�
 ```
 
 ## Conclusión
-
 Estos cambios aseguran que cada ejecución del código genera gráficos únicos y permite medir y reportar el tiempo de generación de los gráficos de manera precisa. Esto es útil para el monitoreo del rendimiento y para evitar conflictos de nombres de archivos en ejecuciones múltiples en el mismo día.
