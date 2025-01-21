@@ -71,6 +71,8 @@ Para validar los archivos y calcular estadísticas, actualizamos nuestro script 
 
 ![Trabajando coop](TA06/images/trabajando.png)
 
+*El fotógrafo estaba trabajando también dentro del trabajo y fue quien tomó la foto ;)*
+
 Este proceso nos costó mucho esfuerzo y tuvimos que pulirlo varias veces porque no paraba de fallar el script o el Copilot generaba código que requería supervisión. 
 
 ![img.png](TA06/images/img.png)
