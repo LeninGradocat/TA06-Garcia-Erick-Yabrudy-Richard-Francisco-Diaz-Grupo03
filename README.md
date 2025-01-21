@@ -69,7 +69,7 @@ df = pd.read_csv(file_path, delimiter=delimiter, error_bad_lines=False)`
 
 Para validar los archivos y calcular estadísticas, actualizamos nuestro script en Python.
 
-![trabajando.png] (TA06/images/trabajando.png)
+![Trabajando coop](TA06/images/trabajando.png)
 
 Este proceso nos costó mucho esfuerzo y tuvimos que pulirlo varias veces porque no paraba de fallar el script o el Copilot generaba código que requería supervisión. 
 
