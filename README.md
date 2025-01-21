@@ -28,6 +28,97 @@ Al abrir cada archivo de datos se muestra, lo siguiente:
 ![image](https://github.com/user-attachments/assets/bc90edf0-06e4-4943-b0dd-100ac5affa88)
 
 
+# 02 Organización y procesamiento de datos
+Para organizar y procesar las datos, seguimos estos pasos:  
+
+## Lectura de archivos:  
+
+
+- Revisamos las cabeceras, la separación entre datos, comentarios, etc. 
+
+`header = f.readline().strip()`
+
+- Detectamos delimitadores (espacios, comas o tabulaciones).
+
+`delimiter = detect_delimiter(header)`
+
+
+- Verificamos que todos los archivos tienen el mismo formato, y que no hubieran otros diferentes.
+
+## Verificación del formato:  
+
+- Creamos un script de validación básica para leer las primeras filas de cada archivo y determinar el número de columnas y delimitadores.
+
+`columns = len(header.split(delimiter))`
+
+- Nos aseguramos de que las columnas tenían el tipo de datos esperado (numérico, fecha, etc.).
+
+## Limpieza de datos:  
+
+- Gestionamos los errores de lectura utilizando pandas.
+
+```python
+import pandas as pd`
+df = pd.read_csv(file_path, delimiter=delimiter, error_bad_lines=False)`
+```
+
+- Además verificamos la consistencia de las columnas.
+- E identificamos y tratamos datos nulos o valores atípicos.
+
+## 03 Validación y cálculo de estadísticas
+
+Para validar los archivos y calcular estadísticas, actualizamos nuestro script en Python.
+
+![Trabajando coop](TA06/images/trabajando.png)
+
+*El fotógrafo estaba trabajando también dentro del trabajo y fue quien tomó la foto ;)*
+
+Este proceso nos costó mucho esfuerzo y tuvimos que pulirlo varias veces porque no paraba de fallar el script o el Copilot generaba código que requería supervisión. 
+
+![img.png](TA06/images/img.png)
+
+Finalmente, logramos que funcionara correctamente, y actualmente realiza las siguientes tareas:
+
+- Detecta y normaliza delimitadores.
+
+normalize_delimiter(file_path, delimiter)
+
+- Valida encabezados y metadatos.
+
+```python
+if not validate_header(lines[0]):
+    errors.append(f"Invalid header: {lines[0].strip()}")
+```
+
+
+- Verifica la consistencia de los datos.
+
+`valid, error = validate_data_line(line, expected_columns)`
+
+- Calcula estadísticas anuales de precipitación.
+
+`total_rainfall += rainfall`
+
+- Muestra un resumen de la validación y la tasa de cambio anual de las precipitaciones.
+
+## 04 Resultados
+
+Al finalizar la validación, obtuvimos las siguientes estadísticas:  
+
+- Errores encontrados: Número total de errores en los archivos.
+- Líneas procesadas: Número total de líneas procesadas.
+- Valores totales procesados: Número total de valores procesados.
+- Valores faltantes (-999): Número total de valores faltantes.
+- Porcentaje de valores faltantes: Porcentaje de valores faltantes respecto al total.
+- Precipitación total: Precipitación total acumulada.
+- Precipitación media anual: Precipitación media anual.
+- Año más seco: Año con la menor precipitación.
+- Año más lluvioso: Año con la mayor precipitación.
+
+Además, mostramos la tasa de cambio anual de las precipitaciones en formato tabular.
+
+## 05 Representación en base a las estadísticas
+
 ## Reporte de Cambios en la Generación de Gráficos y Cálculo del Tiempo
 
 ### Generación de Gráficos
@@ -89,5 +180,4 @@ print(f"Tiempo para generar el gráfico de Variación Estacional de Precipitaci�
 ```
 
 ## Conclusión
-
 Estos cambios aseguran que cada ejecución del código genera gráficos únicos y permite medir y reportar el tiempo de generación de los gráficos de manera precisa. Esto es útil para el monitoreo del rendimiento y para evitar conflictos de nombres de archivos en ejecuciones múltiples en el mismo día.

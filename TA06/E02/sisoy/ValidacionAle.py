@@ -201,11 +201,17 @@ def analyze_and_plot(df):
     df['year'] = metadata.iloc[:, 1]
     df['month'] = metadata.iloc[:, 2]
 
-    monthly_totals = df.groupby(['year', 'month'])['total_rainfall'].sum().reset_index()
     annual_totals = df.groupby('year')['total_rainfall'].sum().reset_index()
+    annual_averages = df.groupby('year')['total_rainfall'].mean().reset_index()
 
-    # Calculate rolling averages
-    annual_totals['rolling_avg'] = annual_totals['total_rainfall'].rolling(window=5).mean()
+    # Redondear los valores de precipitación a enteros
+    annual_totals['total_rainfall'] = annual_totals['total_rainfall'].round().astype(int)
+    annual_averages['total_rainfall'] = annual_averages['total_rainfall'].round().astype(int)
+
+    # Print yearly average precipitation
+    print("Promedio de precipitación anual (litros):")
+    for index, row in annual_averages.iterrows():
+        print(f"{int(row['year'])}: {row['total_rainfall']} litros")
 
     # Get current time for filenames
     current_time = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -213,28 +219,29 @@ def analyze_and_plot(df):
     # Measure the time to generate the first plot
     start_time = time.time()  # Start time
     plt.figure(figsize=(12, 6))
-    plt.plot(annual_totals['year'], annual_totals['rolling_avg'])
-    plt.title('Precipitation Rolling Average')
-    plt.xlabel('Year')
-    plt.ylabel('Rolling Average of Precipitation')
+    plt.plot(annual_totals['year'], annual_totals['total_rainfall'])
+    plt.title('Total de Precipitación Anual')
+    plt.xlabel('Año')
+    plt.ylabel('Total de Precipitación (litros)')
     plt.grid(True)
     plt.savefig(f'precipitation_trend_{current_time}.png')
     plt.close()
     end_time = time.time()  # End time
-    print(f"Time to generate Precipitation Rolling Average plot: {end_time - start_time:.2f} seconds")
+    print(f"Tiempo para generar el gráfico de Total de Precipitación Anual: {end_time - start_time:.2f} segundos")
 
     # Measure the time to generate the second plot
     start_time = time.time()  # Start time
     plt.figure(figsize=(10, 6))
-    sns.boxplot(x='month', y='total_rainfall', data=monthly_totals)
-    plt.title('Seasonal Precipitation Variation')
-    plt.xlabel('Month')
-    plt.ylabel('Total Rainfall')
+    sns.boxplot(x='month', y='total_rainfall', data=df)
+    plt.title('Variación Estacional de Precipitación')
+    plt.xlabel('Mes')
+    plt.ylabel('Precipitación Total (litros)')
     plt.grid(True)
     plt.savefig(f'seasonal_variation_{current_time}.png')
     plt.close()
     end_time = time.time()  # End time
-    print(f"Time to generate Seasonal Precipitation Variation plot: {end_time - start_time:.2f} seconds")
+    print(
+        f"Tiempo para generar el gráfico de Variación Estacional de Precipitación: {end_time - start_time:.2f} segundos")
 
     print("Plots generated successfully.")
 
