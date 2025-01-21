@@ -199,7 +199,7 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
     try:
         with open(log_file_path, 'w') as log_file:
             desc = f"{Fore.GREEN}Validating files"
-            with tqdm(total=len(files), desc=desc,
+            with tqdm(total=len(files) * 2, desc=desc,
                       bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed} < {remaining}, {rate_fmt}]") as pbar:
                 for file_path in sorted(files):
                     errors, file_total_values, file_missing_values, file_total_rainfall, file_lines_processed, file_yearly_data = validate_file(file_path, expected_columns)
@@ -241,6 +241,6 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
     display_annual_change_rate(summarized_change_rate)
 
 if __name__ == "__main__":
-    dir_path = "../../E01/dades"
+    dir_path = "../../E01/dades-prove/"
     log_file_path = "../../E02/validation_log.txt"
     validate_all_files(dir_path, log_file_path)
