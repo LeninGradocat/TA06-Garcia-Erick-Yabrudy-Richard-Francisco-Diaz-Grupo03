@@ -173,6 +173,6 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
                              justify="center"), title="Summary", style="bold green", expand=False))
 
 if __name__ == "__main__":
-    dir_path = "../../E01/dades"
-    log_file_path = "../../E02/validation_log.txt"
-    validate_all_files(dir_path, log_file_path
+    dir_path = "../../E01/dades-prove"
+    log_file_path = "../../E02/v1 programa/validation_log.txt"
+    validate_all_files(dir_path, log_file_path)

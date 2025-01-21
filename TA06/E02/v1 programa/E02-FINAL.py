@@ -9,11 +9,14 @@ def detect_delimiter(line):
     return max(delimiters, key=delimiters.get)
 
 def normalize_delimiter(file_path, delimiter, target_delimiter='\t'):
-    with open(file_path, 'r') as file:
-        lines = file.readlines()
-    normalized_lines = [line.replace(delimiter, target_delimiter) for line in lines]
-    with open(file_path, 'w') as file:
-        file.writelines(normalized_lines)
+    try:
+        with open(file_path, 'r') as file:
+            lines = file.readlines()
+        normalized_lines = [line.replace(delimiter, target_delimiter) for line in lines]
+        with open(file_path, 'w') as file:
+            file.writelines(normalized_lines)
+    except Exception as e:
+        print(f"Error normalizing delimiters: {str(e)}")
 
 def validate_header(header):
     expected_header = "precip\tMIROC5\tRCP60\tREGRESION\tdecimas\t1"
@@ -98,6 +101,21 @@ def process_file(file_path):
 
     return discrepancies, lines_with_minus_999
 
+def check_uniform_format(directory):
+    formats = []
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.endswith(".dat"):
+                try:
+                    with open(os.path.join(root, file), 'r') as f:
+                        header = f.readline().strip()
+                        delimiter = detect_delimiter(header)
+                        columns = len(header.split(delimiter))
+                        formats.append((file, delimiter, columns))
+                except Exception as e:
+                    print(f"Error reading file {file}: {str(e)}")
+    return formats
+
 def validate_files(directory):
     file_infos = [os.path.join(root, file) for root, _, files in os.walk(directory) for file in files if file.endswith('.dat')]
 
@@ -109,12 +127,27 @@ def validate_files(directory):
     log_file_path = f"../../E02/v1 programa/validation_log_{current_time}.log"
     error_log_path = f"../../E02/v1 programa/error_log_{current_time}.log"
 
+    formats = check_uniform_format(directory)
+    unique_formats = set((fmt[1], fmt[2]) for fmt in formats)
+    if len(unique_formats) > 1:
+        print("Found inconsistent formats:")
+        for fmt in unique_formats:
+            print(f"  Delimiter: {fmt[0]}, Columns: {fmt[1]}")
+
     discrepancies = []
     lines_with_minus_999 = 0
+    total_errors = 0
+    total_values = 0
+    missing_values = 0
+    total_rainfall = 0.0
+    lines_processed = 0
+
     for file_path in tqdm(file_infos, desc="Validating files", leave=False):
         result = process_file(file_path)
         discrepancies.extend(result[0])
         lines_with_minus_999 += result[1]
+        total_errors += len(result[0])
+        lines_processed += 1  # Assuming each file is one line for simplicity
 
     with open(log_file_path, 'w') as log_file:
         if not discrepancies:
@@ -123,6 +156,15 @@ def validate_files(directory):
             for discrepancy in discrepancies:
                 log_file.write(f"{discrepancy}\n")
         log_file.write(f"Lines with -999: {lines_with_minus_999}\n")
+
+    missing_percentage = (missing_values / total_values * 100) if total_values else 0
+    print(f"Validation completed.\n"
+          f"Errors found: {total_errors:,}\n"
+          f"Lines processed: {lines_processed:,}\n"
+          f"Total values processed: {total_values:,}\n"
+          f"Missing values (-999) found: {missing_values:,}\n"
+          f"Percentage of missing values: {missing_percentage:.2f}%\n"
+          f"Total rainfall: {total_rainfall:,.2f}")
 
     if discrepancies:
         print("\nFormat discrepancies found. Check the log file for details.")
