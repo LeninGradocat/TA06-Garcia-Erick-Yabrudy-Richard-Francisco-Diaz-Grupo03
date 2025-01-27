@@ -127,6 +127,10 @@ def check_uniform_format(directory):
                     print(f"Error reading file {file}: {str(e)}")
     return formats
 
+def ensure_directory_exists(directory_path):
+    if not os.path.exists(directory_path):
+        os.makedirs(directory_path)
+
 
 def validate_files(directory):
     file_infos = [os.path.join(root, file) for root, _, files in os.walk(directory) for file in files if
@@ -197,15 +201,22 @@ def validate_files(directory):
 def analyze_and_plot(df):
     # Separar metadatos (primeras 3 columnas) de los valores diarios
     metadata = df.iloc[:, :3]
-    daily_values = df.iloc[:, 3:].replace(-999, np.nan)  # Reemplazar -999 con NaN
+    daily_values = df.iloc[:, 3:]
+
+    # Contar los valores -999
+    count_minus_999 = (daily_values == -999).sum().sum()
+    print(f"Cantidad de valores -999: {count_minus_999}")
+
+    # Reemplazar -999 con NaN para el cálculo del promedio
+    daily_values_replaced = daily_values.replace(-999, np.nan)
 
     # Verificar si los valores están en décimas de milímetro (por ejemplo, datos típicos como 500 para 50 mm)
-    if daily_values.max().max() > 1000:  # Un umbral razonable para detección
+    if daily_values_replaced.max().max() > 1000:  # Un umbral razonable para detección
         print("Detectado formato en décimas de mm. Corrigiendo...")
-        daily_values = daily_values / 10  # Convertir a milímetros
+        daily_values_replaced = daily_values_replaced / 10  # Convertir a milímetros
 
-    # Calcular la media diaria por fila
-    df['average_rainfall'] = daily_values.mean(axis=1, skipna=True)
+    # Calcular la media diaria por fila, incluyendo valores -999
+    df['average_rainfall'] = daily_values_replaced.mean(axis=1, skipna=True) + (count_minus_999 / len(daily_values.columns))
     df['year'] = metadata.iloc[:, 1]
     df['month'] = metadata.iloc[:, 2]
 
@@ -245,5 +256,5 @@ def analyze_and_plot(df):
 
     print("Gráficos generados exitosamente.")
 
-directory_path = '../../../E01/data-testing/'
+directory_path = '../../../E01/data/'
 validate_files(directory_path)
