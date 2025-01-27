@@ -13,7 +13,6 @@ def detect_delimiter(line):
     delimiters = {'\t': line.count('\t'), ',': line.count(','), ' ': line.count(' ')}
     return max(delimiters, key=delimiters.get)
 
-
 def normalize_delimiter(file_path, delimiter, target_delimiter='\t'):
     try:
         with open(file_path, 'r') as file:
@@ -137,9 +136,13 @@ def validate_files(directory):
         print("No .dat files found in the directory.")
         return
 
+    # Asegúrate de que el directorio del archivo de registro exista
+    log_directory_path = '../../E02/v1 programa/'
+    ensure_directory_exists(log_directory_path)
+
     current_time = datetime.now().strftime("%Y%m%d%H%M%S")
-    log_file_path = f"../../E02/v1 programa/validation_log_{current_time}.log"
-    error_log_path = f"../../E02/v1 programa/error_log_{current_time}.log"
+    log_file_path = os.path.join(log_directory_path, f"validation_log_{current_time}.log")
+    error_log_path = os.path.join(log_directory_path, f"error_log_{current_time}.log")
 
     formats = check_uniform_format(directory)
     unique_formats = set((fmt[1], fmt[2]) for fmt in formats)
@@ -192,59 +195,55 @@ def validate_files(directory):
 
 
 def analyze_and_plot(df):
-    # Separate metadata (first 3 columns) from daily values
+    # Separar metadatos (primeras 3 columnas) de los valores diarios
     metadata = df.iloc[:, :3]
-    daily_values = df.iloc[:, 3:].replace(-999, np.nan)
+    daily_values = df.iloc[:, 3:].replace(-999, np.nan)  # Reemplazar -999 con NaN
 
-    # Calculate total rainfall per month and per year
-    df['total_rainfall'] = daily_values.sum(axis=1)
+    # Verificar si los valores están en décimas de milímetro (por ejemplo, datos típicos como 500 para 50 mm)
+    if daily_values.max().max() > 1000:  # Un umbral razonable para detección
+        print("Detectado formato en décimas de mm. Corrigiendo...")
+        daily_values = daily_values / 10  # Convertir a milímetros
+
+    # Calcular la media diaria por fila
+    df['average_rainfall'] = daily_values.mean(axis=1, skipna=True)
     df['year'] = metadata.iloc[:, 1]
     df['month'] = metadata.iloc[:, 2]
 
-    annual_totals = df.groupby('year')['total_rainfall'].sum().reset_index()
-    annual_averages = df.groupby('year')['total_rainfall'].mean().reset_index()
+    # Calcular promedios anuales
+    annual_averages = df.groupby('year')['average_rainfall'].mean().reset_index()
 
-    # Redondear los valores de precipitación a enteros
-    annual_totals['total_rainfall'] = annual_totals['total_rainfall'].round().astype(int)
-    annual_averages['total_rainfall'] = annual_averages['total_rainfall'].round().astype(int)
+    # Redondear los valores de precipitación a dos decimales
+    annual_averages['average_rainfall'] = annual_averages['average_rainfall'].round(2)
 
-    # Print yearly average precipitation
-    print("Promedio de precipitación anual (litros):")
+    # Imprimir promedio anual de precipitación
+    print("Promedio de precipitación anual (mm):")
     for index, row in annual_averages.iterrows():
-        print(f"{int(row['year'])}: {row['total_rainfall']} litros")
+        print(f"{int(row['year'])}: {row['average_rainfall']} mm")
 
-    # Get current time for filenames
+    # Obtener la fecha y hora actual para nombres de archivo
     current_time = datetime.now().strftime("%Y%m%d%H%M%S")
 
-    # Measure the time to generate the first plot
-    start_time = time.time()  # Start time
+    # Gráfico de tendencia anual de precipitación (medias anuales)
     plt.figure(figsize=(12, 6))
-    plt.plot(annual_totals['year'], annual_totals['total_rainfall'])
-    plt.title('Total de Precipitación Anual')
+    plt.plot(annual_averages['year'], annual_averages['average_rainfall'], marker='o', linestyle='-')
+    plt.title('Promedio de Precipitación Anual')
     plt.xlabel('Año')
-    plt.ylabel('Total de Precipitación (litros)')
+    plt.ylabel('Promedio de Precipitación (mm)')
     plt.grid(True)
-    plt.savefig(f'precipitation_trend_{current_time}.png')
+    plt.savefig(f'average_precipitation_trend_{current_time}.png')
     plt.close()
-    end_time = time.time()  # End time
-    print(f"Tiempo para generar el gráfico de Total de Precipitación Anual: {end_time - start_time:.2f} segundos")
 
-    # Measure the time to generate the second plot
-    start_time = time.time()  # Start time
+    # Gráfico de caja (variación estacional por mes)
     plt.figure(figsize=(10, 6))
-    sns.boxplot(x='month', y='total_rainfall', data=df)
-    plt.title('Variación Estacional de Precipitación')
+    sns.boxplot(x='month', y='average_rainfall', data=df)
+    plt.title('Variación Estacional de Precipitación (Promedio Diario)')
     plt.xlabel('Mes')
-    plt.ylabel('Precipitación Total (litros)')
+    plt.ylabel('Promedio de Precipitación (mm)')
     plt.grid(True)
-    plt.savefig(f'seasonal_variation_{current_time}.png')
+    plt.savefig(f'seasonal_variation_average_{current_time}.png')
     plt.close()
-    end_time = time.time()  # End time
-    print(
-        f"Tiempo para generar el gráfico de Variación Estacional de Precipitación: {end_time - start_time:.2f} segundos")
 
-    print("Plots generated successfully.")
-
+    print("Gráficos generados exitosamente.")
 
 directory_path = '../../../E01/data-testing/'
 validate_files(directory_path)
