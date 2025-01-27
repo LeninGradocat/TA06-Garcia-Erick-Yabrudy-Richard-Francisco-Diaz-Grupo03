@@ -1,6 +1,7 @@
 import os
 import time
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
@@ -81,6 +82,15 @@ def check_uniform_format(directory):
                                         title="Error", style="bold red", expand=False))
     return formats
 
+def calculate_media_annual(yearly_data):
+    media_annual = {}
+    for year, data in yearly_data.items():
+        valid_rainfall = [value for value in data['rainfall'] if value != -999]
+        total_rainfall = sum(valid_rainfall)
+        count = len(data['rainfall'])  # Include all values in the count
+        media_annual[year] = total_rainfall / count if count > 0 else 0
+    return media_annual
+
 def validate_file(file_path, expected_columns=34):
     """Validates an entire file and collects statistics."""
     errors = []
@@ -116,12 +126,14 @@ def validate_file(file_path, expected_columns=34):
                     rainfall = sum(float(value) for value in parts[3:] if value != "-999")
                     total_rainfall += rainfall
                     lines_processed += 1
+
                     if year not in yearly_data:
                         yearly_data[year] = {'total_rainfall': 0, 'count': 0}
                     yearly_data[year]['total_rainfall'] += rainfall
                     yearly_data[year]['count'] += 1
     except Exception as e:
         errors.append(f"Error processing file {file_path}: {str(e)}")
+
     return errors, total_values, missing_values, total_rainfall, lines_processed, yearly_data
 
 def calculate_statistics(yearly_data):
@@ -162,15 +174,6 @@ def calculate_statistics(yearly_data):
         'annual_change_rate': annual_change_rate
     }
 
-def display_annual_change_rate(change_rate):
-    """Displays the annual change rate in a tabular format."""
-    table = Table(title="Annual Change Rate")
-    table.add_column("Year", justify="center", style="bold green")
-    table.add_column("Change (%)", justify="right", style="bold blue")
-    for year, rate in change_rate:
-        table.add_row(str(year), f"{rate:.2f}%")
-    console.print(table)
-
 def validate_all_files(directory, log_file_path, expected_columns=34):
     """Validates all files in a directory and logs errors."""
     if not os.path.isdir(directory):
@@ -199,7 +202,7 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
     try:
         with open(log_file_path, 'w') as log_file:
             desc = f"{Fore.GREEN}Validating files"
-            with tqdm(total=len(files) * 2, desc=desc,
+            with tqdm(total=len(files), desc=desc,
                       bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed} < {remaining}, {rate_fmt}]") as pbar:
                 for file_path in sorted(files):
                     errors, file_total_values, file_missing_values, file_total_rainfall, file_lines_processed, file_yearly_data = validate_file(file_path, expected_columns)
@@ -226,6 +229,7 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
     missing_percentage = (missing_values / total_values * 100) if total_values else 0
     stats = calculate_statistics(yearly_data)
     summarized_change_rate = stats['annual_change_rate']
+    media_annual = calculate_media_annual(yearly_data)
 
     console.print(Panel(Text(f"Validation completed.\n"
                              f"Errors found: {total_errors:,}\n"
@@ -238,9 +242,8 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
                              f"Driest year: {stats['driest_year'][0]} with {stats['driest_year'][1]:,.2f} mm\n"
                              f"Wettest year: {stats['wettest_year'][0]} with {stats['wettest_year'][1]:,.2f} mm\n",
                              justify="center"), title="Summary", style="bold green", expand=False))
-    display_annual_change_rate(summarized_change_rate)
 
 if __name__ == "__main__":
-    dir_path = "../../E01/data/"
+    dir_path = "../../E01/data-testing/"
     log_file_path = "../validation_log.txt"
     validate_all_files(dir_path, log_file_path)
