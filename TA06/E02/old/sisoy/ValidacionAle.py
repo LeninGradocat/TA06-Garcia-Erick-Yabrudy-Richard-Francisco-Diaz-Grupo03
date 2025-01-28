@@ -111,7 +111,6 @@ def process_file(file_path):
 
     return discrepancies, lines_with_minus_999
 
-
 def check_uniform_format(directory):
     formats = []
     for root, _, files in os.walk(directory):
