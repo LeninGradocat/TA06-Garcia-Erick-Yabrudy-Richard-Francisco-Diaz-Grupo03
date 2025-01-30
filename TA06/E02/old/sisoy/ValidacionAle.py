@@ -139,7 +139,6 @@ def validate_files(directory):
         print("No .dat files found in the directory.")
         return
 
-    # Asegúrate de que el directorio del archivo de registro exista
     log_directory_path = '../../E02/v1 programa/'
     ensure_directory_exists(log_directory_path)
 
@@ -157,9 +156,6 @@ def validate_files(directory):
     discrepancies = []
     lines_with_minus_999 = 0
     total_errors = 0
-    total_values = 0
-    missing_values = 0
-    total_rainfall = 0.0
     all_data = []
 
     for file_path in tqdm(file_infos, desc="Validating files", leave=False):
@@ -168,7 +164,6 @@ def validate_files(directory):
         lines_with_minus_999 += result[1]
         total_errors += len(result[0])
 
-        # Read the file again to aggregate data
         df = pd.read_csv(file_path, sep='\s+', header=None, skiprows=2)
         all_data.append(df)
 
@@ -196,9 +191,7 @@ def validate_files(directory):
     else:
         print("\nAll files have consistent formats.")
 
-
 def analyze_and_plot(df):
-    # Separar metadatos (primeras 3 columnas) de los valores diarios
     metadata = df.iloc[:, :3]
     daily_values = df.iloc[:, 3:]
 

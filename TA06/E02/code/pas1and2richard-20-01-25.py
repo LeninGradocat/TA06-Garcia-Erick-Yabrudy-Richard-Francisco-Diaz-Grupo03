@@ -9,6 +9,7 @@ from rich.panel import Panel
 from rich.text import Text
 from colorama import Fore, init
 
+
 # Initialize Colorama and Rich
 init(autoreset=True)
 console = Console()
@@ -186,7 +187,7 @@ def display_annual_rainfall(media_annual):
 
     console.print(table)
 
-def validate_all_files(directory, log_file_path, expected_columns=34):
+def validate_all_files(directory, expected_columns=34):
     """Validates all files in a directory and logs errors."""
     if not os.path.isdir(directory):
         console.print(Panel(Text(f"Directory not found: {directory}", justify="center"),
@@ -242,7 +243,6 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
     stats = calculate_statistics(yearly_data)
     media_annual = calculate_media_annual(yearly_data)
     summarize_change_rate = stats['annual_change_rate']
-
     console.print(Panel(Text(f"Validation completed.\n"
                              f"Errors found: {total_errors:,}\n"
                              f"Lines processed: {lines_processed:,}\n"
@@ -256,7 +256,8 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
                              justify="center"), title="Summary", style="bold green", expand=False))
     display_annual_rainfall(media_annual)
 
+
 if __name__ == "__main__":
-    dir_path = "../../E01/data/"
+    dir_path = "../../E01/data-testing/"
     log_file_path = "../validation_log.txt"
-    validate_all_files(dir_path, log_file_path)
+    validate_all_files(dir_path)
