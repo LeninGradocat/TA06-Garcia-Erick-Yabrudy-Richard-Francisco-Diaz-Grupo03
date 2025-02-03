@@ -136,19 +136,28 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
     total_rainfall = 0
     lines_processed = 0
     file_line_counts = {}
+    all_yearly_data = {}
 
     try:
         with open(log_file_path, 'w') as log_file:
             desc = "Validating files"
             with tqdm(total=len(files), desc=desc) as pbar:
                 for file_path in sorted(files):
-                    errors, file_total_values, file_missing_values, file_total_rainfall, file_lines_processed, _ = validate_file(file_path, expected_columns)
+                    errors, file_total_values, file_missing_values, file_total_rainfall, file_lines_processed, yearly_data = validate_file(file_path, expected_columns)
                     total_errors += len(errors)
                     total_values += file_total_values
                     missing_values += file_missing_values
                     total_rainfall += file_total_rainfall
                     lines_processed += file_lines_processed
                     file_line_counts[file_path] = file_lines_processed
+
+                    # Acumular datos anuales
+                    for year, data in yearly_data.items():
+                        if year not in all_yearly_data:
+                            all_yearly_data[year] = {'total_rainfall': 0, 'count': 0}
+                        all_yearly_data[year]['total_rainfall'] += data['total_rainfall']
+                        all_yearly_data[year]['count'] += data['count']
+
                     if errors:
                         log_file.write(f"Invalid file format: {file_path}\n")
                         for error in errors:
@@ -157,7 +166,23 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
     except Exception as e:
         console.print(Panel(f"Error writing to log file: {str(e)}", title="Error", style="bold red"))
 
-    generate_summary(total_errors, lines_processed, total_values, missing_values)
+    generate_summary(total_errors, lines_processed, total_values, missing_values, all_yearly_data)
+
+def generate_summary(total_errors, lines_processed, total_values, missing_values, yearly_data):
+    missing_percentage = (missing_values / total_values * 100) if total_values else 0
+    summary_text = Text(f"Validation completed.\n"
+                        f"Errors found: {total_errors:,}\n"
+                        f"Lines processed: {lines_processed:,}\n"
+                        f"Total values processed: {total_values:,}\n"
+                        f"Missing values (-999) found: {missing_values:,}\n"
+                        f"Percentage of missing values: {missing_percentage:.2f}%\n\n"
+                        f"Annual Precipitation Averages:\n", justify="center")
+
+    for year, data in sorted(yearly_data.items()):
+        average_rainfall = data['total_rainfall'] / data['count'] if data['count'] else 0
+        summary_text.append(f"Year {year}: {average_rainfall:.2f} mm\n", style="bold green")
+
+    console.print(Panel(summary_text, border_style="bold cyan", title="Summary", expand=False))
 
 if __name__ == "__main__":
     log_file_path = os.path.join(BASE_DIR, "validation_log.txt")
