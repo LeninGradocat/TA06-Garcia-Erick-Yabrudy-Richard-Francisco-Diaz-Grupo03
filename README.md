@@ -3,7 +3,7 @@ The objective of this task, is to use the power of data and the most advanced AI
 
 <div align="center">
    <h1>
-      <a href="https://github.com/LeninGradocat/TA06-Garcia-Erick-Yabrudy-Richard-Francisco-Diaz-Grupo03/blob/main/TA06/E04/index.html">Ir a mi página principal</a>
+      <a href="/TA06/E04/index.html">Ir a mi página principal</a>
    </h1>
 </div>
 
