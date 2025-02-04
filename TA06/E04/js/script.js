@@ -1,5 +1,5 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const csvPath = '../E03/output/stats/annual_precipitation_summary_20250204_124219.csv'; // Ruta del archivo CSV en tu proyecto
+    const csvPath = 'TA06/E03/output/stats/annual_precipitation_summary_20250204_124219.csv'; // Ruta del archivo CSV en nuestro proyecto
 
     fetch(csvPath)
         .then(response => {
