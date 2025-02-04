@@ -13,7 +13,7 @@ console = Console()
 
 # Configurar ruta base del script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "../E01/data-testing")
+DATA_DIR = os.path.join(BASE_DIR, "../E01/data")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
 # Crear subcarpetas para gráficos y estadísticas
