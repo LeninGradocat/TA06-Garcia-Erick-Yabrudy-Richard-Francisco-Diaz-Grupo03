@@ -7,6 +7,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
 from tqdm import tqdm
+import numpy as np
 
 console = Console()
 
@@ -15,8 +16,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "../E01/data-testing")
 OUTPUT_DIR = os.path.join(BASE_DIR, "output")
 
-# Crear el directorio de salida si no existe
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# Crear subcarpetas para gráficos y estadísticas
+STATS_DIR = os.path.join(OUTPUT_DIR, "stats")
+GRAPHS_DIR = os.path.join(OUTPUT_DIR, "graphs")
+os.makedirs(STATS_DIR, exist_ok=True)
+os.makedirs(GRAPHS_DIR, exist_ok=True)
 
 def get_file_path(filename):
     """Obtiene la ruta absoluta del archivo dentro del directorio de datos."""
@@ -112,9 +116,10 @@ def validate_file(filename, expected_columns=34):
                     total_rainfall += rainfall
                     year = int(line.split()[1])
                     if year not in yearly_data:
-                        yearly_data[year] = {'total_rainfall': 0, 'count': 0}
+                        yearly_data[year] = {'total_rainfall': 0, 'count': 0, 'values': []}
                     yearly_data[year]['total_rainfall'] += rainfall
                     yearly_data[year]['count'] += 1
+                    yearly_data[year]['values'].extend([float(v) for v in line.split()[3:] if v != "-999"])
     except Exception as e:
         errors.append(f"Error procesando archivo {filename}: {str(e)}")
 
@@ -133,26 +138,53 @@ def generate_summary(total_errors, lines_processed, total_values, missing_values
     summary_data = []
     for year, data in sorted(yearly_data.items()):
         average_rainfall = data['total_rainfall'] / data['count'] if data['count'] else 0
-        summary_text.append(f"Year {year}: {average_rainfall:.2f} mm\n", style="bold green")
-        summary_data.append({'Year': year, 'Average Rainfall': average_rainfall})
+        max_rainfall = max(data['values']) if data['values'] else 0
+        min_rainfall = min(data['values']) if data['values'] else 0
+        std_dev = np.std(data['values']) if data['values'] else 0
+        variability_index = (std_dev / average_rainfall) * 100 if average_rainfall else 0
+
+        summary_text.append(f"Year {year}: Avg={average_rainfall:.2f} mm, Max={max_rainfall:.2f} mm, Min={min_rainfall:.2f} mm, Std Dev={std_dev:.2f}, Variability Index={variability_index:.2f}%\n", style="bold green")
+        summary_data.append({
+            'Year': year,
+            'Average Rainfall': average_rainfall,
+            'Max Rainfall': max_rainfall,
+            'Min Rainfall': min_rainfall,
+            'Std Dev': std_dev,
+            'Variability Index': variability_index
+        })
 
     console.print(Panel(summary_text, border_style="bold cyan", title="Summary", expand=False))
 
-    # Guardar las estadísticas en un archivo CSV
+    # Guardar las estadísticas en un archivo CSV con fecha y hora
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    summary_csv_path = os.path.join(STATS_DIR, f"annual_precipitation_summary_{timestamp}.csv")
     summary_df = pd.DataFrame(summary_data)
-    summary_csv_path = os.path.join(OUTPUT_DIR, "annual_precipitation_summary.csv")
     summary_df.to_csv(summary_csv_path, index=False)
     console.print(f"Summary saved to {summary_csv_path}", style="bold green")
 
-    # Generar gráfico
-    plt.figure(figsize=(10, 6))
-    plt.plot(summary_df['Year'], summary_df['Average Rainfall'], marker='o', linestyle='-', color='b')
-    plt.title('Annual Precipitation Averages')
+    # Generar gráfico con fecha y hora
+    plt.figure(figsize=(12, 8))
+    years = [data['Year'] for data in summary_data]
+    avg_rainfall = [data['Average Rainfall'] for data in summary_data]
+    max_rainfall = [data['Max Rainfall'] for data in summary_data]
+    min_rainfall = [data['Min Rainfall'] for data in summary_data]
+    std_dev = [data['Std Dev'] for data in summary_data]
+
+    plt.plot(years, avg_rainfall, marker='o', linestyle='-', color='b', label='Average Rainfall')
+    plt.fill_between(years, min_rainfall, max_rainfall, color='lightblue', alpha=0.3, label='Min-Max Range')
+    plt.errorbar(years, avg_rainfall, yerr=std_dev, fmt='o', color='r', label='Std Dev')
+
+    plt.title('Annual Precipitation Statistics')
     plt.xlabel('Year')
-    plt.ylabel('Average Rainfall (mm)')
+    plt.ylabel('Rainfall (mm)')
     plt.grid(True)
-    plt.savefig(os.path.join(OUTPUT_DIR, "annual_precipitation_graph.png"))
-    console.print(f"Graph saved to {os.path.join(OUTPUT_DIR, 'annual_precipitation_graph.png')}", style="bold green")
+    plt.legend()
+    plt.tight_layout()
+
+    graph_path = os.path.join(GRAPHS_DIR, f"annual_precipitation_graph_{timestamp}.png")
+    plt.savefig(graph_path)
+    console.print(f"Graph saved to {graph_path}", style="bold green")
+    plt.close()
 
 def validate_all_files(directory, log_file_path, expected_columns=34):
     if not os.path.isdir(directory):
@@ -184,9 +216,10 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
                     # Acumular datos anuales
                     for year, data in yearly_data.items():
                         if year not in all_yearly_data:
-                            all_yearly_data[year] = {'total_rainfall': 0, 'count': 0}
+                            all_yearly_data[year] = {'total_rainfall': 0, 'count': 0, 'values': []}
                         all_yearly_data[year]['total_rainfall'] += data['total_rainfall']
                         all_yearly_data[year]['count'] += data['count']
+                        all_yearly_data[year]['values'].extend(data['values'])
 
                     if errors:
                         log_file.write(f"Invalid file format: {file_path}\n")
