@@ -4,8 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gráficos Estadísticos</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./css/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -20,6 +22,22 @@
             <div class="chart-container">
                 <canvas id="rainfallChart"></canvas>
             </div>
+            <button id="downloadCsv">Descargar CSV</button>
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>Año</th>
+                        <th>Promedio de Lluvias</th>
+                        <th>Máxima Lluvia</th>
+                        <th>Mínima Lluvia</th>
+                        <th>Desviación Estándar</th>
+                        <th>Índice de Variabilidad</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Filas de datos se agregarán aquí dinámicamente -->
+                </tbody>
+            </table>
         </section>
         <footer>
             <p>&copy; 2025 - Todos los derechos reservados</p>

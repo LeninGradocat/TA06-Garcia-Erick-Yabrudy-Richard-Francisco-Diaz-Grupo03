@@ -1,167 +1,216 @@
 import os
-import sys
-from datetime import datetime
-from rich.console import Console
-from rich.panel import Panel
-from rich.text import Text
+import pandas as pd
+import numpy as np
 from tqdm import tqdm
+from datetime import datetime
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
 
-console = Console()
+# Suprimir todas las advertencias
+warnings.filterwarnings("ignore")
 
-# Configurar ruta base del script
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "../E01/data-testing")
-
-def get_file_path(filename):
-    """Obtiene la ruta absoluta del archivo dentro del directorio de datos."""
-    return os.path.join(DATA_DIR, filename)
+def is_leap_year(year):
+    """Determina si un año es bisiesto."""
+    return year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)
 
 def detect_delimiter(line):
-    """Detecta el delimitador más frecuente en una línea."""
     delimiters = {'\t': line.count('\t'), ',': line.count(','), ' ': line.count(' ')}
     return max(delimiters, key=delimiters.get)
 
-def normalize_delimiter(file_path, delimiter, target_delimiter='\t'):
-    """Normaliza delimitadores en un archivo."""
-    try:
-        with open(file_path, 'r') as file:
-            lines = file.readlines()
-        normalized_lines = [line.replace(delimiter, target_delimiter) for line in lines]
-        with open(file_path, 'w') as file:
-            file.writelines(normalized_lines)
-    except Exception as e:
-        console.print(Panel(f"Error normalizando delimitadores: {str(e)}", title="Error", style="bold red"))
-
 def validate_header(header):
-    """Valida que el encabezado sea el esperado."""
     expected_header = "precip\tMIROC5\tRCP60\tREGRESION\tdecimas\t1"
     return header.strip() == expected_header
 
 def validate_metadata(metadata):
-    """Valida los metadatos del archivo."""
     parts = metadata.split('\t')
     if len(parts) != 8:
-        return False, "Los metadatos deben tener 8 columnas"
+        return False, "Metadata should have 8 columns"
     try:
-        float(parts[1])  # Latitud
-        float(parts[2])  # Longitud
-        int(parts[3])  # Elevación o código
-        int(parts[5])  # Año de inicio
-        int(parts[6])  # Año de fin
+        float(parts[1])
+        float(parts[2])
+        int(parts[3])
+        int(parts[5])
+        int(parts[6])
     except ValueError as e:
         return False, str(e)
     return True, None
 
-def validate_data_line(line, expected_columns=34):
-    """Valida que cada línea de datos tenga el formato correcto."""
-    parts = line.split()
-    if len(parts) != expected_columns:
-        return False, f"Se esperaban {expected_columns} columnas, se encontraron {len(parts)}"
+def validate_line(line, id_value, year_range, days_in_month):
+    parts = line.strip().split()
+    if len(parts) < 3:
+        return False, "Line has less than 3 columns"
+
+    if parts[0] != id_value:
+        return False, "ID mismatch"
+
+    year = int(parts[1])
+    if year < year_range[0] or year > year_range[1]:
+        return False, "Year out of range"
+
+    month = int(parts[2])
+    if month not in days_in_month:
+        return False, "Invalid month"
+
+    if month == 2:
+        expected_days = 29 if is_leap_year(year) else 28
+    else:
+        expected_days = days_in_month[month]
+
+    actual_days = len(parts) - 3
+    if parts[-1] == "-999":
+        actual_days -= 1
+
+    if actual_days != expected_days:
+        return False, f"Month {month} has {actual_days} days of data instead of {expected_days}"
+
+    return True, ""
+
+def process_file(file_path, year_range):
+    discrepancies = set()  # Use a set to avoid duplicate messages
+    lines_with_minus_999 = 0
     try:
-        int(parts[1])  # Año
-        int(parts[2])  # Mes
-        for value in parts[3:]:
-            if value != "-999":
-                float(value)
-    except ValueError as e:
-        return False, str(e)
-    return True, None
+        df = pd.read_csv(file_path, sep='\s+', header=None, skiprows=2, chunksize=1000)
+        for chunk in df:
+            id_value = chunk.iloc[0, 0]
+            days_in_month = {
+                1: 31, 2: 28, 3: 31, 4: 30, 5: 31, 6: 30,
+                7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31
+            }
 
-def validate_file(filename, expected_columns=34):
-    """Valida un archivo completo y recopila estadísticas."""
-    file_path = get_file_path(filename)
-
-    if not os.path.exists(file_path):
-        console.print(Panel(f"El archivo {filename} no existe en {DATA_DIR}", title="Error", style="bold red"))
-        sys.exit(1)
-
-    errors = []
-    total_values, missing_values, total_rainfall, lines_processed = 0, 0, 0, 0
-    yearly_data = {}
-    current_year = datetime.now().year
-
-    try:
-        with open(file_path, 'r') as file:
-            lines = file.readlines()
-            delimiter = detect_delimiter(lines[0])
-            normalize_delimiter(file_path, delimiter)
-            lines = [line.replace(delimiter, '\t') for line in lines]
-
-            if not validate_header(lines[0]):
-                errors.append(f"Encabezado inválido: {lines[0].strip()}")
-
-            metadata_valid, error = validate_metadata(lines[1])
-            if not metadata_valid:
-                errors.append(f"Error en metadatos: {error}")
-
-            for i, line in enumerate(lines[2:], start=3):
-                year = int(line.split()[1])
-                if year > current_year:
-                    continue
-
-                valid, error = validate_data_line(line, expected_columns)
-                if not valid:
-                    errors.append(f"Error en línea {i}: {error}")
-                else:
-                    total_values += len(line.split()[3:])
-                    missing_values += line.split()[3:].count("-999")
-                    rainfall = sum(float(v) for v in line.split()[3:] if v != "-999")
-                    total_rainfall += rainfall
-                    lines_processed += 1
-                    if year not in yearly_data:
-                        yearly_data[year] = {'total_rainfall': 0, 'count': 0}
-                    yearly_data[year]['total_rainfall'] += rainfall
-                    yearly_data[year]['count'] += 1
+            for index, row in chunk.iterrows():
+                line = " ".join(row.astype(str).values)
+                is_valid, msg = validate_line(line, id_value, year_range, days_in_month)
+                if not is_valid:
+                    if line.strip().endswith("-999"):
+                        lines_with_minus_999 += 1
+                    else:
+                        discrepancies.add(f"{file_path} {msg} on line {index + 3}")
     except Exception as e:
-        errors.append(f"Error procesando archivo {filename}: {str(e)}")
+        discrepancies.add(f"{file_path} {str(e)}")
 
-    return errors, total_values, missing_values, total_rainfall, lines_processed, yearly_data
+    return discrepancies, lines_with_minus_999
 
-def generate_summary(total_errors, lines_processed, total_values, missing_values):
-    missing_percentage = (missing_values / total_values * 100) if total_values else 0
-    console.print(Panel(Text(f"Validation completed.\n"
-                            f"Errors found: {total_errors:,}\n"
-                            f"Lines processed: {lines_processed:,}\n"
-                            f"Total values processed: {total_values:,}\n"
-                            f"Missing values (-999) found: {missing_values:,}\n"
-                            f"Percentage of missing values: {missing_percentage:.2f}%", justify="center"),
-                            border_style="bold cyan", title="Summary", expand=False))
+def check_uniform_format(directory):
+    formats = []
+    for root, _, files in os.walk(directory):
+        for file in files:
+            if file.endswith(".dat"):
+                try:
+                    with open(os.path.join(root, file), 'r') as f:
+                        header = f.readline().strip()
+                        delimiter = detect_delimiter(header)
+                        columns = len(header.split(delimiter))
+                        formats.append((file, delimiter, columns))
+                except Exception as e:
+                    pass
+    return formats
 
-def validate_all_files(directory, log_file_path, expected_columns=34):
-    if not os.path.isdir(directory):
-        console.print(Panel(f"Directory not found: {directory}", title="Error", style="bold red"))
+def validate_files(directory, year_range):
+    file_infos = [os.path.join(root, file) for root, _, files in os.walk(directory) for file in files if file.endswith('.dat')]
+
+    if not file_infos:
+        print("No .dat files found in the directory.")
         return
-    files = [os.path.join(root, file) for root, _, files in os.walk(directory) for file in files if file.endswith(".dat")]
 
+    formats = check_uniform_format(directory)
+    unique_formats = set((fmt[1], fmt[2]) for fmt in formats)
+    if len(unique_formats) > 1:
+        print("Found inconsistent formats:")
+        for fmt in unique_formats:
+            print(f"  Delimiter: {fmt[0]}, Columns: {fmt[1]}")
+
+    discrepancies = set()  # Use a set to avoid duplicate messages
+    lines_with_minus_999 = 0
     total_errors = 0
-    total_values = 0
-    missing_values = 0
-    total_rainfall = 0
-    lines_processed = 0
-    file_line_counts = {}
+    all_data = []
 
-    try:
-        with open(log_file_path, 'w') as log_file:
-            desc = "Validating files"
-            with tqdm(total=len(files), desc=desc) as pbar:
-                for file_path in sorted(files):
-                    errors, file_total_values, file_missing_values, file_total_rainfall, file_lines_processed, _ = validate_file(file_path, expected_columns)
-                    total_errors += len(errors)
-                    total_values += file_total_values
-                    missing_values += file_missing_values
-                    total_rainfall += file_total_rainfall
-                    lines_processed += file_lines_processed
-                    file_line_counts[file_path] = file_lines_processed
-                    if errors:
-                        log_file.write(f"Invalid file format: {file_path}\n")
-                        for error in errors:
-                            log_file.write(f"  {error}\n")
-                    pbar.update(1)
-    except Exception as e:
-        console.print(Panel(f"Error writing to log file: {str(e)}", title="Error", style="bold red"))
+    for file_path in tqdm(file_infos, desc="Validating files", leave=False):
+        result = process_file(file_path, year_range)
+        discrepancies.update(result[0])
+        lines_with_minus_999 += result[1]
+        total_errors += len(result[0])
 
-    generate_summary(total_errors, lines_processed, total_values, missing_values)
+        df = pd.read_csv(file_path, sep='\s+', header=None, skiprows=2)
+        all_data.append(df)
+
+    if all_data:
+        combined_df = pd.concat(all_data, ignore_index=True)
+        analyze_and_plot(combined_df, year_range)
+
+    missing_percentage = (lines_with_minus_999 / sum(df.size for df in all_data) * 100) if all_data else 0
+    print(f"Validation completed.\n"
+          f"Errors found: {total_errors:,}\n"
+          f"Lines with -999: {lines_with_minus_999:,}\n"
+          f"Percentage of missing values: {missing_percentage:.2f}%\n")
+
+    if discrepancies:
+        print("\nFormat discrepancies found:")
+        # Omitir la impresión de los detalles de discrepancias
+    else:
+        print("\nAll files have consistent formats.")
+
+def analyze_and_plot(df, year_range):
+    metadata = df.iloc[:, :3]
+    daily_values = df.iloc[:, 3:]
+
+    # Contar los valores -999
+    count_minus_999 = (daily_values == -999).sum().sum()
+    print(f"Cantidad de valores -999: {count_minus_999}")
+
+    # Reemplazar -999 con NaN para el cálculo del promedio
+    daily_values_replaced = daily_values.replace(-999, np.nan)
+
+    # Calcular la media diaria por fila, excluyendo valores NaN
+    df['average_rainfall'] = daily_values_replaced.mean(axis=1, skipna=True)
+    df['year'] = metadata.iloc[:, 1]
+    df['month'] = metadata.iloc[:, 2]
+
+    # Filtrar el rango de años
+    df = df[(df['year'] >= year_range[0]) & (df['year'] <= year_range[1])]
+
+    # Calcular promedios anuales
+    annual_averages = df.groupby('year')['average_rainfall'].mean().reset_index()
+
+    # Redondear los valores de precipitación a dos decimales
+    annual_averages['average_rainfall'] = annual_averages['average_rainfall'].round(2)
+
+    # Imprimir promedio anual de precipitación
+    print("Promedio de precipitación anual (mm):")
+    for index, row in annual_averages.iterrows():
+        print(f"{int(row['year'])}: {row['average_rainfall']} mm")
+
+    # Obtener la fecha y hora actual para nombres de archivo
+    current_time = datetime.now().strftime("%Y%m%d%H%M%S")
+
+    # Gráfico de tendencia anual de precipitación (medias anuales)
+    plt.figure(figsize=(12, 6))
+    plt.plot(annual_averages['year'], annual_averages['average_rainfall'], marker='o', linestyle='-')
+    plt.title('Promedio de Precipitación Anual')
+    plt.xlabel('Año')
+    plt.ylabel('Promedio de Precipitación (mm)')
+    plt.grid(True)
+    plt.savefig(f'average_precipitation_trend_{current_time}.png')
+    plt.close()
+
+    # Gráfico de caja (variación estacional por mes)
+    plt.figure(figsize=(10, 6))
+    sns.boxplot(x='month', y='average_rainfall', data=df)
+    plt.title('Variación Estacional de Precipitación (Promedio Diario)')
+    plt.xlabel('Mes')
+    plt.ylabel('Promedio de Precipitación (mm)')
+    plt.grid(True)
+    plt.savefig(f'seasonal_variation_average_{current_time}.png')
+    plt.close()
+
+    print("Gráficos generados exitosamente.")
 
 if __name__ == "__main__":
-    log_file_path = os.path.join(BASE_DIR, "validation_log.txt")
-    validate_all_files(DATA_DIR, log_file_path)
+    # Ruta relativa al directorio de datos
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    relative_data_path = os.path.join(base_path, '../E01/data')
+
+    # Definir el rango de años
+    year_range = (2006, 2025)
+
+    validate_files(relative_data_path, year_range)
