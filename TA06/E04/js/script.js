@@ -108,12 +108,12 @@ document.addEventListener('DOMContentLoaded', function () {
             parsedData.forEach(row => {
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td>${row['Year']}</td>
-                    <td>${row['Average Rainfall']}</td>
-                    <td>${row['Max Rainfall']}</td>
-                    <td>${row['Min Rainfall']}</td>
-                    <td>${row['Std Dev']}</td>
-                    <td>${row['Variability Index']}</td>
+                    <td>${row['Year'] || ''}</td>
+                    <td>${row['Average Rainfall'] ? parseFloat(row['Average Rainfall']).toFixed(2) : ''}</td>
+                    <td>${row['Max Rainfall'] ? parseFloat(row['Max Rainfall']).toFixed(2) : ''}</td>
+                    <td>${row['Min Rainfall'] ? parseFloat(row['Min Rainfall']).toFixed(2) : ''}</td>
+                    <td>${row['Std Dev'] ? parseFloat(row['Std Dev']).toFixed(2) : ''}</td>
+                    <td>${row['Variability Index'] ? parseFloat(row['Variability Index']).toFixed(2) : ''}</td>
                 `;
                 tableBody.appendChild(tr);
             });
