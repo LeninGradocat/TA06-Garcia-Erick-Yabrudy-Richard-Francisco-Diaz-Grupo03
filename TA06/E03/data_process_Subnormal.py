@@ -10,7 +10,7 @@ console = Console()
 
 # Configurar ruta base del script
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "../E01/data")
+DATA_DIR = os.path.join(BASE_DIR, "../E01/data-testing")
 
 def get_file_path(filename):
     """Obtiene la ruta absoluta del archivo dentro del directorio de datos."""
@@ -114,15 +114,21 @@ def validate_file(filename, expected_columns=34):
 
     return errors, total_values, missing_values, total_rainfall, lines_processed, yearly_data
 
-def generate_summary(total_errors, lines_processed, total_values, missing_values):
+def generate_summary(total_errors, lines_processed, total_values, missing_values, yearly_data):
     missing_percentage = (missing_values / total_values * 100) if total_values else 0
-    console.print(Panel(Text(f"Validation completed.\n"
-                            f"Errors found: {total_errors:,}\n"
-                            f"Lines processed: {lines_processed:,}\n"
-                            f"Total values processed: {total_values:,}\n"
-                            f"Missing values (-999) found: {missing_values:,}\n"
-                            f"Percentage of missing values: {missing_percentage:.2f}%", justify="center"),
-                            border_style="bold cyan", title="Summary", expand=False))
+    summary_text = Text(f"Validation completed.\n"
+                        f"Errors found: {total_errors:,}\n"
+                        f"Lines processed: {lines_processed:,}\n"
+                        f"Total values processed: {total_values:,}\n"
+                        f"Missing values (-999) found: {missing_values:,}\n"
+                        f"Percentage of missing values: {missing_percentage:.2f}%\n\n"
+                        f"Annual Precipitation Averages:\n", justify="center", style="green")
+
+    for year, data in sorted(yearly_data.items()):
+        average_rainfall = data['total_rainfall'] / data['count'] if data['count'] else 0
+        summary_text.append(f"Year {year}: {average_rainfall:.2f} mm\n", style="bold green")
+
+    console.print(Panel(summary_text, border_style="bold cyan", title="Summary", expand=False))
 
 def validate_all_files(directory, log_file_path, expected_columns=34):
     if not os.path.isdir(directory):
@@ -167,22 +173,6 @@ def validate_all_files(directory, log_file_path, expected_columns=34):
         console.print(Panel(f"Error writing to log file: {str(e)}", title="Error", style="bold red"))
 
     generate_summary(total_errors, lines_processed, total_values, missing_values, all_yearly_data)
-
-def generate_summary(total_errors, lines_processed, total_values, missing_values, yearly_data):
-    missing_percentage = (missing_values / total_values * 100) if total_values else 0
-    summary_text = Text(f"Validation completed.\n"
-                        f"Errors found: {total_errors:,}\n"
-                        f"Lines processed: {lines_processed:,}\n"
-                        f"Total values processed: {total_values:,}\n"
-                        f"Missing values (-999) found: {missing_values:,}\n"
-                        f"Percentage of missing values: {missing_percentage:.2f}%\n\n"
-                        f"Annual Precipitation Averages:\n", justify="center")
-
-    for year, data in sorted(yearly_data.items()):
-        average_rainfall = data['total_rainfall'] / data['count'] if data['count'] else 0
-        summary_text.append(f"Year {year}: {average_rainfall:.2f} mm\n", style="bold green")
-
-    console.print(Panel(summary_text, border_style="bold cyan", title="Summary", expand=False))
 
 if __name__ == "__main__":
     log_file_path = os.path.join(BASE_DIR, "validation_log.txt")

@@ -1,61 +1,64 @@
-from datetime import datetime
-from rich.console import Console
-from rich.table import Table
+import os
 
-# Initialize Rich console
-console = Console()
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_DIR = os.path.join(BASE_DIR, "../E01/data-testing")
 
+def get_file_path(filename):
+    """Obtiene la ruta absoluta del archivo dentro del directorio de datos."""
+    return os.path.join(DATA_DIR, filename)
 
-def calculate_media_annual(yearly_data):
-    """Calculates the annual average rainfall."""
-    media_annual = {}
-    for year, data in yearly_data.items():
-        if data['count'] > 0:  # Avoid division by zero
-            media_annual[year] = data['total_rainfall'] / data['count']
-        else:
-            media_annual[year] = 0
-    return media_annual
+def detect_delimiter(line):
+    """Detecta el delimitador más frecuente en una línea."""
+    delimiters = {'\t': line.count('\t'), ',': line.count(','), ' ': line.count(' ')}
+    return max(delimiters, key=delimiters.get)
 
+def normalize_delimiter(file_path, delimiter, target_delimiter='\t'):
+    """Normaliza delimitadores en un archivo."""
+    from rich.console import Console
+    from rich.panel import Panel
 
-def calculate_statistics(yearly_data):
-    """Calculates statistics from yearly data."""
-    current_year = datetime.now().year
-    filtered_data = {year: data for year, data in yearly_data.items() if year <= current_year}
+    console = Console()
 
-    if not filtered_data:
-        return {
-            'total_years': 0,
-            'total_rainfall': 0,
-            'average_rainfall': 0,
-            'driest_year': (None, 0),
-            'wettest_year': (None, 0),
-        }
+    try:
+        with open(file_path, 'r') as file:
+            lines = file.readlines()
+        normalized_lines = [line.replace(delimiter, target_delimiter) for line in lines]
+        with open(file_path, 'w') as file:
+            file.writelines(normalized_lines)
+    except Exception as e:
+        console.print(Panel(f"Error normalizando delimitadores: {str(e)}", title="Error", style="bold red"))
 
-    total_years = len(filtered_data)
-    total_rainfall = sum(data['total_rainfall'] for data in filtered_data.values())
-    average_rainfall = total_rainfall / total_years if total_years else 0
-    yearly_rainfall = {year: data['total_rainfall'] for year, data in filtered_data.items()}
-    sorted_years = sorted(yearly_rainfall.items(), key=lambda x: x[1])
-    driest_year = sorted_years[0] if sorted_years else (None, 0)
-    wettest_year = sorted_years[-1] if sorted_years else (None, 0)
+def validate_header(header):
+    """Valida que el encabezado sea el esperado."""
+    expected_header = "precip\tMIROC5\tRCP60\tREGRESION\tdecimas\t1"
+    return header.strip() == expected_header
 
-    return {
-        'total_years': total_years,
-        'total_rainfall': total_rainfall,
-        'average_rainfall': average_rainfall,
-        'driest_year': driest_year,
-        'wettest_year': wettest_year,
-    }
+def validate_metadata(metadata):
+    """Valida los metadatos del archivo."""
+    parts = metadata.split('\t')
+    if len(parts) != 8:
+        return False, "Los metadatos deben tener 8 columnas"
+    try:
+        float(parts[1])  # Latitud
+        float(parts[2])  # Longitud
+        int(parts[3])  # Elevación o código
+        int(parts[5])  # Año de inicio
+        int(parts[6])  # Año de fin
+    except ValueError as e:
+        return False, str(e)
+    return True, None
 
-
-def display_annual_rainfall(media_annual):
-    """Displays the annual average rainfall."""
-    table = Table(title="Annual Average Rainfall")
-
-    table.add_column("Year", justify="right", style="cyan", no_wrap=True)
-    table.add_column("Average Rainfall (mm)", justify="right", style="magenta")
-
-    for year, rainfall in sorted(media_annual.items()):
-        table.add_row(str(year), f"{rainfall:.2f}")
-
-    console.print(table)
+def validate_data_line(line, expected_columns=34):
+    """Valida que cada línea de datos tenga el formato correcto."""
+    parts = line.split()
+    if len(parts) != expected_columns:
+        return False, f"Se esperaban {expected_columns} columnas, se encontraron {len(parts)}"
+    try:
+        int(parts[1])  # Año
+        int(parts[2])  # Mes
+        for value in parts[3:]:
+            if value != "-999":
+                float(value)
+    except ValueError as e:
+        return False, str(e)
+    return True, None

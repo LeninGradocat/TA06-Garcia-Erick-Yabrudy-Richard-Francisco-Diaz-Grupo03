@@ -1,71 +1,21 @@
-import os
-import sys
-from VALIDATION import validate_file
-from DATA_PROCESSING import calculate_statistics, calculate_media_annual, display_annual_rainfall
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
 
-# Configurar ruta del archivo a analizar
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(BASE_DIR, "../E01/data-testing")
+console = Console()
 
-def get_file_path(filename):
-    """Obtiene la ruta absoluta del archivo dentro del directorio de datos."""
-    return os.path.join(DATA_DIR, filename)
+def generate_summary(total_errors, lines_processed, total_values, missing_values, yearly_data):
+    missing_percentage = (missing_values / total_values * 100) if total_values else 0
+    summary_text = Text(f"Validation completed.\n"
+                        f"Errors found: {total_errors:,}\n"
+                        f"Lines processed: {lines_processed:,}\n"
+                        f"Total values processed: {total_values:,}\n"
+                        f"Missing values (-999) found: {missing_values:,}\n"
+                        f"Percentage of missing values: {missing_percentage:.2f}%\n\n"
+                        f"Annual Precipitation Averages:\n", justify="center", style="green")
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("Uso: python STADISTICS.py <nombre_archivo>")
-        sys.exit(1)
+    for year, data in sorted(yearly_data.items()):
+        average_rainfall = data['total_rainfall'] / data['count'] if data['count'] else 0
+        summary_text.append(f"Year {year}: {average_rainfall:.2f} mm\n", style="bold green")
 
-    filename = sys.argv[1]
-    file_path = get_file_path(filename)
-
-    if not os.path.exists(file_path):
-        print(f"Error: El archivo '{filename}' no se encuentra en {DATA_DIR}")
-        sys.exit(1)
-
-    # Validar el archivo
-    errors, total_values, missing_values, total_rainfall, lines_processed, yearly_data = validate_file(filename)
-
-    if errors:
-        print("\n🔴 Errores encontrados en el archivo:")
-        for error in errors:
-            print(f" - {error}")
-    else:
-        print("\n✅ Archivo validado exitosamente.")
-
-    # Analizar estadísticas
-    statistics = calculate_statistics(yearly_data)
-    media_annual = calculate_media_annual(yearly_data)
-
-    # Mostrar resultados
-    print("\n📊 Estadísticas Generales:")
-    print(f" - Años analizados: {statistics['total_years']}")
-    print(f" - Total de precipitación registrada: {statistics['total_rainfall']:.2f} mm")
-    print(f" - Promedio anual de precipitación: {statistics['average_rainfall']:.2f} mm")
-    print(f" - Año más seco: {statistics['driest_year'][0]} con {statistics['driest_year'][1]['total_rainfall']:.2f} mm")
-    print(f" - Año más lluvioso: {statistics['wettest_year'][0]} con {statistics['wettest_year'][1]['total_rainfall']:.2f} mm")
-
-    # Mostrar tabla de precipitación anual
-    display_annual_rainfall(media_annual)
-from VALIDATION import validate_file
-from DATA_PROCESSING import calculate_statistics, calculate_media_annual, display_annual_rainfall
-
-if __name__ == "__main__":
-    filename = "../E01/data-testing"
-
-    errors, total_values, missing_values, total_rainfall, lines_processed, yearly_data = validate_file(filename)
-
-    if errors:
-        print("Errores encontrados:")
-        for error in errors:
-            print(error)
-    else:
-        print("Archivo validado exitosamente.")
-
-    statistics = calculate_statistics(yearly_data)
-    media_annual = calculate_media_annual(yearly_data)
-
-    print("Estadísticas Generales:")
-    print(statistics)
-
-    display_annual_rainfall(media_annual)
+    console.print(Panel(summary_text, border_style="bold cyan", title="Summary", expand=False))
