@@ -1,10 +1,18 @@
 document.addEventListener('DOMContentLoaded', function () {
-    const csvPath = './output/stats/annual_precipitation_summary_20250101_000000.csv'; // Cambia la ruta según sea necesario
+    const csvPath = '../E03/output/stats/annual_precipitation_summary_20250204_124219.csv'; // Ruta del archivo CSV en tu proyecto
 
     fetch(csvPath)
-        .then(response => response.text())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok ' + response.statusText);
+            }
+            return response.text();
+        })
         .then(data => {
+            console.log('CSV Data:', data); // Log CSV data
             const parsedData = Papa.parse(data, { header: true }).data;
+            console.log('Parsed Data:', parsedData); // Log parsed data
+
             const years = parsedData.map(row => row['Year']);
             const avgRainfall = parsedData.map(row => parseFloat(row['Average Rainfall']));
             const maxRainfall = parsedData.map(row => parseFloat(row['Max Rainfall']));
@@ -95,7 +103,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             });
 
-            // Llenar la tabla con los datos
+            // Fill the table with data
             const tableBody = document.getElementById('dataTable').querySelector('tbody');
             parsedData.forEach(row => {
                 const tr = document.createElement('tr');
@@ -110,7 +118,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 tableBody.appendChild(tr);
             });
 
-            // Manejar la descarga del CSV
+            // Handle CSV download
             document.getElementById('downloadCsv').addEventListener('click', () => {
                 const blob = new Blob([data], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement('a');
@@ -118,5 +126,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 link.download = 'annual_precipitation_summary.csv';
                 link.click();
             });
+        })
+        .catch(error => {
+            console.error('Error fetching the CSV file:', error);
         });
 });
