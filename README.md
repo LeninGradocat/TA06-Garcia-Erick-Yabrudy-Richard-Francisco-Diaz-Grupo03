@@ -3,7 +3,7 @@ The objective of this task, is to use the power of data and the most advanced AI
 
 <div align="center">
    <h1>
-      <a href="/TA06/E04/index.html">Ir a mi página principal</a>
+      <a href="index.html">Ir a mi página principal</a>
    </h1>
 </div>
 
@@ -65,8 +65,8 @@ Para organizar y procesar las datos, seguimos estos pasos:
 - Gestionamos los errores de lectura utilizando pandas.
 
 ```python
-import pandas as pd`
-df = pd.read_csv(file_path, delimiter=delimiter, error_bad_lines=False)`
+import pandas as pd
+df = pd.read_csv(file_path, delimiter=delimiter, error_bad_lines=False)
 ```
 
 - Además verificamos la consistencia de las columnas.
