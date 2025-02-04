@@ -117,3 +117,18 @@ table th {
         font-size: 1.5rem;
     }
 }
+
+.documentation-link a {
+    display: inline-block;
+    background: #333;
+    color: #fff;
+    padding: 10px 20px;
+    margin: 10px 0;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+}
+
+.documentation-link a:hover {
+    background: #555;
+}
