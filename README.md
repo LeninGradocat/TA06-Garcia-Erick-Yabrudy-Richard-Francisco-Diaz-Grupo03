@@ -2,9 +2,9 @@
 The objective of this task, is to use the power of data and the most advanced AI technologies trained with “our expertise”, to tailor solutions in the green transformation, be it decarbonization, decontamination, resource saving and regeneration, or any other solution.
 
 <div align="center">
-  <h1>
-    <a href="index.html">Ir a mi página principal</a>
-  </h1>
+   <h1>
+      <a href="/TA06/E04/index.html">Ir a mi página principal</a>
+   </h1>
 </div>
 
 
